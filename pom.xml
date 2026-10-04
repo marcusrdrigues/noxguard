@@ -35,6 +35,7 @@
 
   <modules>
     <module>noxguard-core</module>
+    <module>noxguard-reactor</module>
   </modules>
 
   <properties>
@@ -44,6 +45,7 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
     <junit.version>6.1.0</junit.version>
+    <reactor.version>3.8.3</reactor.version>
 
     <compiler-plugin.version>3.14.0</compiler-plugin.version>
     <surefire-plugin.version>3.5.3</surefire-plugin.version>
@@ -52,6 +54,21 @@
 
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>com.marcusrdrigues</groupId>
+        <artifactId>noxguard-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.projectreactor</groupId>
+        <artifactId>reactor-core</artifactId>
+        <version>${reactor.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.projectreactor</groupId>
+        <artifactId>reactor-test</artifactId>
+        <version>${reactor.version}</version>
+      </dependency>
       <dependency>
         <groupId>org.junit</groupId>
         <artifactId>junit-bom</artifactId>
