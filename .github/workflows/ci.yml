@@ -26,6 +26,9 @@ jobs:
           cache: maven
       - name: Build and test
         run: mvn -B -ntp verify
+      - name: Check the release build (sources, Javadoc, Central plugin), without signing
+        if: matrix.java == '21'
+        run: mvn -B -ntp -P release -Dgpg.skip verify
 
   example:
     name: Example app (Java 25) + noxeval
