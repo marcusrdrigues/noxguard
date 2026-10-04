@@ -1,0 +1,12 @@
+# Real model: SPRING_PROFILES_ACTIVE=openai OPENAI_API_KEY=... OPENAI_CHAT_MODEL=<a model id you have tested>.
+spring:
+  ai:
+    model:
+      chat: openai
+    chat:
+      client:
+        enabled: true
+    openai:
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL}

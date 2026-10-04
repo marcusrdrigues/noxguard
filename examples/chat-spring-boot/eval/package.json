@@ -1,0 +1,12 @@
+{
+  "name": "noxguard-example-eval",
+  "private": true,
+  "type": "module",
+  "description": "noxeval suite for the noxguard example app.",
+  "scripts": {
+    "eval": "noxeval run"
+  },
+  "devDependencies": {
+    "noxeval": "^0.4.0"
+  }
+}

@@ -26,3 +26,34 @@ jobs:
           cache: maven
       - name: Build and test
         run: mvn -B -ntp verify
+
+  example:
+    name: Example app (Java 25) + noxeval
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: Install the library
+        run: mvn -B -ntp install -DskipTests
+      - name: Build and test the example
+        run: mvn -B -ntp -f examples/chat-spring-boot/pom.xml verify
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - name: Run noxeval against the example
+        run: |
+          java -jar examples/chat-spring-boot/target/chat-spring-boot-example-0.1.0-SNAPSHOT.jar --server.port=8080 > app.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null -X POST -H 'content-type: application/json' -d '{"question":"Where is the store?"}' http://localhost:8080/api/chat/complete && break
+            sleep 1
+          done
+          cd examples/chat-spring-boot/eval
+          npm ci
+          npx noxeval run
+      - name: Show the app log
+        if: failure()
+        run: cat app.log || true

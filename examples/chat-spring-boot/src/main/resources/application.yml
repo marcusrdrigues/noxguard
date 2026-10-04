@@ -1,0 +1,24 @@
+server:
+  port: ${PORT:8080}
+
+noxguard:
+  example:
+    # At least 32 bytes. Without it, the app makes a random one at startup (signatures then die with the process).
+    history-secret: ${NOXGUARD_HISTORY_SECRET:}
+
+spring:
+  ai:
+    # The default profile uses the scripted model: no model, no API key, no network. The "openai" profile turns these on.
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    chat:
+      client:
+        enabled: false
+    openai:
+      api-key: ${OPENAI_API_KEY:unset}
