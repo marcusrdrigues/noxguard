@@ -7,4 +7,6 @@ module com.marcusrdrigues.noxguard {
     exports com.marcusrdrigues.noxguard.output;
     exports com.marcusrdrigues.noxguard.data;
     exports com.marcusrdrigues.noxguard.history;
+    exports com.marcusrdrigues.noxguard.agent;
+    exports com.marcusrdrigues.noxguard.input;
 }
