@@ -37,13 +37,13 @@ public final class InputViews {
                     + "\\u2060-\\u206F\\u3164\\uFE00-\\uFE0F\\uFEFF\\uFFA0]");
     private static final Pattern SPACES = Pattern.compile("[ \\t]+");
     private static final Pattern BASE64_RUN = Pattern.compile("[A-Za-z0-9+/]{16,}={0,2}");
-    private static final Pattern SEGMENT_END = Pattern.compile("(?U)[:.!?]\\s+");
+    private static final Pattern SEGMENT_END = Pattern.compile("[:.!?][" + Text.SPACE_CLASS + "]+");
     private static final Pattern ASCII_WORD = Pattern.compile("[a-z]{2,}", Pattern.CASE_INSENSITIVE);
     private static final Pattern WORD = Pattern.compile("[a-zà-ú]+");
     private static final Pattern MIXED_WORD = Pattern.compile("\\b(?=[\\p{L}\\d]*\\d)(?=[\\p{L}\\d]*\\p{L})[\\p{L}\\d]{3,}\\b");
     private static final Pattern LEET_DIGIT = Pattern.compile("[0134578]");
     private static final Pattern PRINTABLE = Pattern.compile("[\\p{L}\\p{N}\\p{P}\\p{Zs}]");
-    private static final Pattern WHITESPACE = Pattern.compile("(?U)\\s");
+    private static final Pattern WHITESPACE = Pattern.compile("[" + Text.SPACE_CLASS + "]");
     private static final Pattern THREE_LETTERS = Pattern.compile("\\p{L}{3,}");
     private static final Map<Character, Character> LEET = Map.of('0', 'o', '1', 'i', '3', 'e', '4', 'a', '5', 's', '7', 't', '8', 'b');
 
@@ -79,7 +79,7 @@ public final class InputViews {
     public static String normalize(String text) {
         Text.required(text, "text");
         String nfkc = Normalizer.normalize(text, Normalizer.Form.NFKC);
-        return SPACES.matcher(INVISIBLE.matcher(nfkc).replaceAll("")).replaceAll(" ").strip();
+        return Text.trim(SPACES.matcher(INVISIBLE.matcher(nfkc).replaceAll("")).replaceAll(" "));
     }
 
     /** Decoded versions of the message with the default common words. See {@link #decode(String)}. */

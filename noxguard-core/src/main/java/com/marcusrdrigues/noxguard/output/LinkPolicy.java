@@ -13,7 +13,8 @@ import java.util.regex.Pattern;
  * instruction makes the model write a link or image with data in the URL.
  *
  * <p>Only explicit links count ({@code http://}, {@code https://}, {@code www.}), so names like
- * ASP.NET or Node.js are not taken for addresses. Trailing punctuation is dropped and the value is
+ * ASP.NET or Node.js are not taken for addresses. A link ends at any Unicode whitespace, so a no-break
+ * space can't join a foreign link to an allowed one. Trailing punctuation is dropped and the value is
  * lowercased. A link passes when an allowed pattern is found in the full value (host and path) or in
  * the host alone. Any Markdown image is reported, allowed or not.
  *
@@ -30,7 +31,10 @@ import java.util.regex.Pattern;
 public final class LinkPolicy {
 
     private static final Pattern MARKDOWN_IMAGE = Pattern.compile("!\\[[^\\]]*\\]\\(");
-    private static final Pattern LINK = Pattern.compile("\\b(?:https?://|www\\.)[^\\s<>\"'`)\\]]+", Pattern.CASE_INSENSITIVE);
+    // A link starts where no letter or digit comes before it ("_https://..." is still a link) and ends at
+    // any whitespace JavaScript and Markdown renderers see, including the no-break space.
+    private static final Pattern LINK = Pattern.compile(
+            "(?<![A-Za-z0-9])(?:https?://|www\\.)[^" + Text.SPACE_CLASS + "<>\"'`)\\]]+", Pattern.CASE_INSENSITIVE);
     private static final Pattern SCHEME = Pattern.compile("^https?://", Pattern.CASE_INSENSITIVE);
     private static final Pattern TRAILING_PUNCTUATION = Pattern.compile("[.,;:!?]+$");
     private static final Pattern HOST_END = Pattern.compile("[/?#]");

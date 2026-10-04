@@ -70,6 +70,7 @@ class AgentGuardsTest {
         schema.put("$schema", "https://json-schema.org/draft/2020-12/schema");
         schema.put("type", "object");
         schema.put("properties", Map.of("slug", slug));
+        schema.put("required", List.of("slug"));
         schema.put("additionalProperties", false);
 
         assertEquals(Map.of(
@@ -88,13 +89,19 @@ class AgentGuardsTest {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("assunto", Map.of("type", "string", "maxLength", 80));
         properties.put("contato", Map.of("anyOf", List.of(Map.of("type", "string", "maxLength", 120), Map.of("type", "null"))));
-        properties.put("tags", Map.of("type", "array", "items", Map.of("type", "object", "properties", Map.of("nome", Map.of("type", "string")))));
-        Map<String, Object> strict = StrictSchema.of(Map.of("type", "object", "properties", properties));
+        properties.put("nome", Map.of("type", "string"));
+        properties.put("tags", Map.of("type", "array", "items", Map.of(
+                "type", "object", "properties", Map.of("nome", Map.of("type", "string")), "required", List.of("nome"))));
+        Map<String, Object> strict = StrictSchema.of(Map.of(
+                "type", "object", "properties", properties, "required", List.of("assunto", "contato", "tags")));
 
-        assertEquals(List.of("assunto", "contato", "tags"), strict.get("required"));
+        assertEquals(List.of("assunto", "contato", "nome", "tags"), strict.get("required"));
         @SuppressWarnings("unchecked")
         Map<String, Object> props = (Map<String, Object>) strict.get("properties");
-        assertEquals(Map.of("anyOf", List.of(Map.of("type", "string"), Map.of("type", "null"))), props.get("contato"));
+        assertEquals(Map.of("anyOf", List.of(Map.of("type", "string"), Map.of("type", "null"))), props.get("contato"),
+                "already nullable: kept as it is");
+        assertEquals(Map.of("anyOf", List.of(Map.of("type", "string"), Map.of("type", "null"))), props.get("nome"),
+                "optional: required but nullable, so the model sends null instead of inventing a value");
         assertEquals(Map.of("type", "array", "items", Map.of(
                         "type", "object",
                         "properties", Map.of("nome", Map.of("type", "string")),
@@ -103,5 +110,29 @@ class AgentGuardsTest {
                 props.get("tags"));
         assertThrows(UnsupportedOperationException.class, () -> strict.put("x", 1), "the result is unmodifiable");
         assertThrows(IllegalArgumentException.class, () -> StrictSchema.of(Map.of("type", "object", "properties", List.of())));
+    }
+
+    @Test
+    @DisplayName("strict schema: a deep copy, so changing the input later changes nothing")
+    void strictSchemaIsADeepCopy() {
+        List<String> colors = new java.util.ArrayList<>(List.of("red", "green"));
+        Map<String, Object> color = new LinkedHashMap<>();
+        color.put("type", "string");
+        color.put("enum", colors);
+        Map<String, Object> strict = StrictSchema.of(Map.of("type", "object", "properties", Map.of("color", color), "required", List.of("color")));
+        colors.add("blue");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> props = (Map<String, Object>) strict.get("properties");
+        @SuppressWarnings("unchecked")
+        List<Object> copied = (List<Object>) ((Map<String, Object>) props.get("color")).get("enum");
+        assertEquals(List.of("red", "green"), copied);
+        assertThrows(UnsupportedOperationException.class, () -> copied.add("blue"));
+    }
+
+    @Test
+    @DisplayName("strict schema: a type list with object is closed too")
+    void strictSchemaTypeList() {
+        Map<String, Object> strict = StrictSchema.of(Map.of("type", List.of("object", "null"), "properties", Map.of()));
+        assertEquals(false, strict.get("additionalProperties"));
     }
 }

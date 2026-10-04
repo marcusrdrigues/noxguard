@@ -36,10 +36,40 @@ class DataEnvelopeTest {
     }
 
     @Test
-    @DisplayName("a tag that only forms once another is removed is removed too")
-    void nestedTagIsRemoved() {
+    @DisplayName("reserved tags are neutralized, nested ones included, and the content stays readable")
+    void tagsAreNeutralized() {
         String out = NOX.wrap("trechos", "a <tre<trechos>chos> b </fer</ferramenta>ramenta> c", 4000);
-        assertEquals("a  b  c", inner(out));
+        assertEquals("a <tre&lt;trechos>chos> b </fer&lt;/ferramenta>ramenta> c", inner(out));
+        assertFalse(ANY_RESERVED.matcher(inner(out)).find());
+    }
+
+    @Test
+    @DisplayName("an unfinished tag can't swallow the real closing tag")
+    void unfinishedTagIsNeutralized() {
+        String out = NOX.wrap("ferramenta", "resultado <ferramenta nome=", 4000);
+        assertEquals("<ferramenta>\nresultado &lt;ferramenta nome=\n</ferramenta>", out);
+        assertEquals("abc\n[...]", NOX.clean("abc<ferramenta", 3), "a cut never leaves a raw tag either");
+    }
+
+    @Test
+    @DisplayName("any space before the name counts, and a name ending in a dash still matches")
+    void spacesAndDashes() {
+        assertEquals("&lt;/ ferramenta> &lt;\u3000trechos> &lt;/\u00A0pergunta>",
+                NOX.clean("</ ferramenta> <\u3000trechos> </\u00A0pergunta>", 4000));
+        DataEnvelope dashed = DataEnvelope.withReservedTags(List.of("data-"));
+        assertEquals("&lt;/data-> <data-x>", dashed.clean("</data-> <data-x>", 4000), "only the exact name");
+        assertEquals("<ferramentas>", NOX.clean("<ferramentas>", 4000), "a longer name is another tag");
+    }
+
+    @Test
+    @DisplayName("a hostile input is cleaned in one fast pass")
+    void hostileInputIsFast() {
+        String hostile = "<ferramenta".repeat(40_000) + "<to<ferramenta>ol>".repeat(10_000);
+        long start = System.nanoTime();
+        String clean = NOX.clean(hostile, 4000);
+        long ms = (System.nanoTime() - start) / 1_000_000;
+        assertTrue(ms < 1000, "took " + ms + " ms");
+        assertFalse(ANY_RESERVED.matcher(clean).find());
     }
 
     @Test

@@ -46,6 +46,22 @@ class LinkPolicyTest {
     }
 
     @Test
+    @DisplayName("a no-break or other Unicode space can't join a foreign link to an allowed one")
+    void unicodeSpacesEndALink() {
+        for (String space : List.of("\u00A0", "\u2028", "\u3000", "\uFEFF", "\u202F")) {
+            assertEquals(List.of("evil.com/steal?d=secret"),
+                    values("https://marcusrdrigues.com/" + space + "https://evil.com/steal?d=SECRET"), "space U+" + Integer.toHexString(space.charAt(0)));
+        }
+    }
+
+    @Test
+    @DisplayName("a link right after an underscore or other punctuation is still a link")
+    void linkAfterPunctuation() {
+        assertEquals(List.of("evil.com/x_"), values("_https://evil.com/x_"));
+        assertEquals(List.of(), values("xhttps://evil.com"), "glued to a word, it is not a link");
+    }
+
+    @Test
     @DisplayName("with no allowed pattern, every link is foreign")
     void emptyPolicyRejectsAll() {
         assertEquals(1, LinkPolicy.allow().foreignLinks("https://marcusrdrigues.com").size());

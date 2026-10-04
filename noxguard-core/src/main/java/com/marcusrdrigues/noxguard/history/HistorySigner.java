@@ -1,6 +1,9 @@
 package com.marcusrdrigues.noxguard.history;
 
 import com.marcusrdrigues.noxguard.internal.Text;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -68,7 +71,8 @@ public final class HistorySigner {
      * @param scope what the signature is bound to, such as {@code "answer:en"}; no line breaks
      * @param text the answer exactly as sent to the client
      * @throws IllegalArgumentException when the scope has a line break (it would make two different
-     *     scope and text pairs sign the same bytes)
+     *     scope and text pairs sign the same bytes), or the text has a lone surrogate (it has no UTF-8
+     *     form, and replacing it would make two texts sign the same)
      */
     public String sign(String scope, String text) {
         Text.required(scope, "scope");
@@ -79,18 +83,46 @@ public final class HistorySigner {
         try {
             Mac mac = Mac.getInstance(ALGORITHM);
             mac.init(key);
-            byte[] digest = mac.doFinal((scope + "\n" + text).getBytes(StandardCharsets.UTF_8));
+            byte[] digest = mac.doFinal(utf8(scope + "\n" + text));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("HmacSHA256 is not available in this JVM", e);
         }
     }
 
-    /** Whether the signature is valid for this scope and text, compared in constant time. */
+    /**
+     * Whether the signature is valid for this scope and text, compared in constant time. A text that
+     * can't be signed (a lone surrogate) is never valid.
+     *
+     * @throws IllegalArgumentException when the scope has a line break
+     */
     public boolean verify(String scope, String text, String signature) {
+        Text.required(text, "text");
         Text.required(signature, "signature");
-        byte[] expected = sign(scope, text).getBytes(StandardCharsets.US_ASCII);
-        return MessageDigest.isEqual(expected, signature.getBytes(StandardCharsets.UTF_8));
+        String expected;
+        try {
+            expected = sign(scope, text);
+        } catch (IllegalArgumentException e) {
+            if (scope.indexOf('\n') >= 0 || scope.indexOf('\r') >= 0) {
+                throw e;
+            }
+            return false;
+        }
+        return MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII), signature.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static byte[] utf8(String text) {
+        try {
+            var bytes = StandardCharsets.UTF_8.newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .encode(CharBuffer.wrap(text));
+            byte[] out = new byte[bytes.remaining()];
+            bytes.get(out);
+            return out;
+        } catch (CharacterCodingException e) {
+            throw new IllegalArgumentException("text has a lone surrogate and can't be signed", e);
+        }
     }
 
     /**

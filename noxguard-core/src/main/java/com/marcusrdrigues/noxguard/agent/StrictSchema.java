@@ -2,6 +2,7 @@ package com.marcusrdrigues.noxguard.agent;
 
 import com.marcusrdrigues.noxguard.internal.Text;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,25 +17,30 @@ import java.util.Set;
  * keeps {@code type}, {@code properties}, {@code required}, {@code additionalProperties},
  * {@code description}, {@code enum}, {@code items} and {@code anyOf}, recursively.
  *
- * <p><strong>Size limits are removed</strong> ({@code minLength}, {@code maxLength} and the like), so
- * they must still be checked in code before running the tool. An optional field becomes a required
- * field that accepts {@code null} ({@code anyOf} with {@code {"type": "null"}}).
+ * <ul>
+ *   <li><strong>Optional fields become nullable.</strong> A property missing from the object's
+ *       {@code required} list is wrapped in {@code anyOf: [schema, {"type": "null"}]}, so the model
+ *       sends {@code null} instead of inventing a value. A property that already accepts null is kept
+ *       as it is.
+ *   <li><strong>Size limits are removed</strong> ({@code minLength}, {@code maxLength} and the like),
+ *       so they must still be checked in code before running the tool.
+ * </ul>
  *
  * <p>The schema is a {@code Map<String, Object>} (as any JSON library reads it), so the core needs no
- * JSON dependency.
+ * JSON dependency. The input is not changed, and the result is a deep, unmodifiable copy.
  */
 public final class StrictSchema {
 
     private static final Set<String> KEYS = Set.of("type", "properties", "required", "additionalProperties", "description", "enum", "items", "anyOf");
+    private static final Map<String, Object> NULL_TYPE = Map.of("type", "null");
 
     private StrictSchema() {}
 
     /**
-     * The strict version of a schema. The input is not changed; the result is unmodifiable and keeps
-     * the order of the properties.
+     * The strict version of a schema, keeping the order of the properties.
      *
      * @throws IllegalArgumentException when {@code properties}, {@code items} or {@code anyOf} has the
-     *     wrong shape
+     *     wrong shape, or a value is {@code null}
      */
     public static Map<String, Object> of(Map<String, ?> schema) {
         Text.required(schema, "schema");
@@ -49,29 +55,88 @@ public final class StrictSchema {
                 case "properties" -> {
                     Map<String, Object> properties = new LinkedHashMap<>();
                     asMap(value, "properties").forEach((name, sub) -> properties.put(name, of(asMap(sub, "properties." + name))));
-                    out.put(key, Collections.unmodifiableMap(properties));
+                    out.put(key, properties);
                 }
                 case "items" -> out.put(key, of(asMap(value, "items")));
                 case "anyOf" -> {
-                    if (!(value instanceof List<?> list)) {
-                        throw new IllegalArgumentException("anyOf must be a list");
-                    }
                     List<Object> options = new ArrayList<>();
-                    for (Object option : list) {
+                    for (Object option : asList(value, "anyOf")) {
                         options.add(of(asMap(option, "anyOf item")));
                     }
                     out.put(key, List.copyOf(options));
                 }
-                default -> out.put(key, value);
+                default -> out.put(key, freeze(value, key));
             }
         }
-        if ("object".equals(out.get("type"))) {
-            Map<String, Object> properties = asMap(out.getOrDefault("properties", Map.of()), "properties");
-            out.put("properties", properties);
-            out.put("required", List.copyOf(properties.keySet()));
-            out.put("additionalProperties", false);
+        if (isObject(out.get("type"))) {
+            close(out, schema.get("required"));
         }
-        return Collections.unmodifiableMap(out);
+        return freezeMap(out);
+    }
+
+    /** Closes an object: every property required, optional ones nullable, no extra properties. */
+    @SuppressWarnings("unchecked")
+    private static void close(Map<String, Object> out, Object originalRequired) {
+        Map<String, Object> properties = (Map<String, Object>) out.getOrDefault("properties", new LinkedHashMap<>());
+        List<?> wasRequired = originalRequired == null ? List.of() : asList(originalRequired, "required");
+        Map<String, Object> closed = new LinkedHashMap<>();
+        properties.forEach((name, sub) -> {
+            Map<String, Object> property = (Map<String, Object>) sub;
+            closed.put(name, wasRequired.contains(name) || acceptsNull(property) ? property : Map.of("anyOf", List.of(property, NULL_TYPE)));
+        });
+        out.put("properties", closed);
+        out.put("required", List.copyOf(closed.keySet()));
+        out.put("additionalProperties", false);
+    }
+
+    private static boolean isObject(Object type) {
+        return "object".equals(type) || (type instanceof Collection<?> types && types.contains("object"));
+    }
+
+    private static boolean acceptsNull(Map<String, Object> schema) {
+        Object type = schema.get("type");
+        if ("null".equals(type) || (type instanceof Collection<?> types && types.contains("null"))) {
+            return true;
+        }
+        if (schema.get("anyOf") instanceof List<?> options) {
+            for (Object option : options) {
+                if (option instanceof Map<?, ?> map && "null".equals(map.get("type"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Deep, unmodifiable copy of a plain value (lists and maps inside are copied too). */
+    private static Object freeze(Object value, String where) {
+        if (value == null) {
+            throw new IllegalArgumentException(where + " must not be null");
+        }
+        if (value instanceof Map<?, ?>) {
+            return freezeMap(asMap(value, where));
+        }
+        if (value instanceof List<?> list) {
+            List<Object> copy = new ArrayList<>();
+            for (Object item : list) {
+                copy.add(freeze(item, where + " item"));
+            }
+            return List.copyOf(copy);
+        }
+        return value;
+    }
+
+    private static Map<String, Object> freezeMap(Map<String, Object> map) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        map.forEach((key, value) -> copy.put(key, freeze(value, key)));
+        return Collections.unmodifiableMap(copy);
+    }
+
+    private static List<?> asList(Object value, String where) {
+        if (!(value instanceof List<?> list)) {
+            throw new IllegalArgumentException(where + " must be a list");
+        }
+        return list;
     }
 
     @SuppressWarnings("unchecked")

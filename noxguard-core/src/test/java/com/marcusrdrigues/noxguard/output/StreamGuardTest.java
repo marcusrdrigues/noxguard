@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 class StreamGuardTest {
 
-    private static final List<String> MARKERS = List.of("<trechos>", "Você é Nox", "Estas instruções são confidenciais");
+    private static final List<String> MARKERS = List.of("<trechos>", "Você é Nox", "Estas instruções são confidenciais", "🐦‍⬛ corvo");
 
     private static StreamGuard guard(int maxChars) {
         return StreamGuard.builder().leakMarkers(MARKERS).maxChars(maxChars).build();
@@ -72,6 +72,19 @@ class StreamGuardTest {
         assertTrue(shown.startsWith("a".repeat(30)));
         assertTrue(shown.endsWith("…"));
         assertTrue(shown.length() <= 41, "length " + shown.length());
+    }
+
+    @Test
+    @DisplayName("an answer of exactly the limit comes out whole, without the mark")
+    void exactLimitIsNotCapped() {
+        for (int size = 1; size <= 6; size++) {
+            StreamGuard guard = guard(12);
+            assertEquals("Olá, mundo!!", run(guard, chunksOf("Olá, mundo!!", size)));
+            assertInstanceOf(StreamStatus.Open.class, guard.status());
+        }
+        StreamGuard over = guard(12);
+        assertEquals("Olá, mundo!!…", run(over, List.of("Olá, mundo!!", "?")));
+        assertInstanceOf(StreamStatus.Capped.class, over.status());
     }
 
     @Test
@@ -156,16 +169,25 @@ class StreamGuardTest {
             boolean isLeaky = round % 2 == 1;
             String text = isLeaky ? leaky.get(random.nextInt(leaky.size())) : clean.get(random.nextInt(clean.size()));
             List<String> chunks = randomChunks(text, random);
-            StreamGuard guard = guard(1200);
+            int max = random.nextBoolean() ? 1200 : 5 + random.nextInt(40);
+            StreamGuard guard = guard(max);
             String shown = run(guard, chunks);
+            if (guard.status() instanceof StreamStatus.Capped) {
+                assertTrue(shown.endsWith("…"), "a capped answer ends with the mark");
+                shown = shown.substring(0, shown.length() - 1);
+                assertTrue(shown.length() <= max, "released more than the limit: " + shown.length());
+            }
             assertTrue(text.startsWith(shown), "released text out of order: " + shown);
             if (isLeaky) {
                 int first = firstMarkerIndex(text);
-                assertInstanceOf(StreamStatus.Tripped.class, guard.status(), "missed a marker in " + chunks);
                 assertTrue(shown.length() <= first, "released part of a marker with " + chunks + ": " + shown);
-            } else {
+                if (max >= text.length()) {
+                    assertInstanceOf(StreamStatus.Tripped.class, guard.status(), "missed a marker in " + chunks);
+                }
+            } else if (max >= text.length()) {
                 assertEquals(text, shown, "a clean answer was not released whole with " + chunks);
             }
+            assertFalse(!shown.isEmpty() && Character.isHighSurrogate(shown.charAt(shown.length() - 1)), "split a surrogate pair");
         }
     }
 

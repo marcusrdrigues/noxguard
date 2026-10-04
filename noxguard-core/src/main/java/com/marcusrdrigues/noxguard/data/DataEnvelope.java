@@ -4,7 +4,6 @@ import com.marcusrdrigues.noxguard.internal.Text;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -12,10 +11,11 @@ import java.util.stream.Collectors;
  * Wraps untrusted text (retrieved passages, tool results) as data before it goes into the prompt.
  *
  * <p>The prompt tells the model that whatever sits inside these tags is data, never instructions. That
- * only holds if the content cannot close the block early or open a fake one, so every opening or
- * closing reserved tag inside the text is removed, in any case and with any attributes, including
- * tags that only form once another is removed ({@code <to<tool>ol>}). The text is then cut at the
- * limit with {@code \n[...]}.
+ * only holds if the content cannot close the block early or open a fake one, so the {@code <} of every
+ * reserved tag inside the text becomes {@code &lt;}: opening or closing, in any case, with spaces of
+ * any kind before the name, and even unfinished ({@code <tool x=} with no {@code >}, which would
+ * otherwise swallow the real closing tag). The text is then cut at the limit with {@code \n[...]}.
+ * One pass over the text, so a hostile input can't make it slow.
  *
  * <pre>{@code
  * DataEnvelope envelope = DataEnvelope.withReservedTags(Set.of("context", "question", "tool"));
@@ -39,7 +39,11 @@ public final class DataEnvelope {
     private DataEnvelope(Set<String> reserved) {
         this.reserved = reserved;
         String names = reserved.stream().map(Pattern::quote).collect(Collectors.joining("|"));
-        this.reservedTag = Pattern.compile("</?\\s*(?:" + names + ")\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+        String space = "[" + Text.SPACE_CLASS + "]*";
+        // The "<" that starts a reserved tag: optional spaces, an optional "/", the name, and then no
+        // more name characters (so "tools" is not "tool", and a name ending in "-" still matches).
+        this.reservedTag = Pattern.compile(
+                "<(?=" + space + "/?" + space + "(?:" + names + ")(?![A-Za-z0-9_-]))", Pattern.CASE_INSENSITIVE);
     }
 
     /**
@@ -98,17 +102,13 @@ public final class DataEnvelope {
         return out.append(">\n").append(clean(text, maxChars)).append("\n</").append(tag).append('>').toString();
     }
 
-    /** The text without reserved tags, cut at the limit. Exposed for apps that build blocks themselves. */
+    /**
+     * The text with every reserved tag neutralized, cut at the limit. Exposed for apps that build
+     * blocks themselves.
+     */
     public String clean(String text, int maxChars) {
         Text.required(text, "text");
-        // Removing a tag can join its neighbours into a new one ("<to<tool>ol>"), so repeat until none is
-        // left. Each pass removes at least one character, so the loop ends.
-        String clean = text;
-        Matcher tags = reservedTag.matcher(clean);
-        while (tags.find()) {
-            clean = tags.replaceAll("");
-            tags = reservedTag.matcher(clean);
-        }
+        String clean = reservedTag.matcher(text).replaceAll("&lt;");
         return clean.length() > maxChars ? clean.substring(0, Text.safeCut(clean, maxChars)) + CUT : clean;
     }
 

@@ -55,6 +55,15 @@ class HistorySignerTest {
     }
 
     @Test
+    @DisplayName("a lone surrogate can't share a signature with another text")
+    void loneSurrogateNeverVerifies() {
+        String sig = SIGNER.sign("answer:en", "Is it ok?");
+        assertFalse(SIGNER.verify("answer:en", "Is it ok\uD800", sig));
+        assertThrows(IllegalArgumentException.class, () -> SIGNER.sign("answer:en", "Is it ok\uD800"));
+        assertThrows(IllegalArgumentException.class, () -> SIGNER.verify("answer\nen", "x", sig), "a bad scope is a bug, not data");
+    }
+
+    @Test
     @DisplayName("a short secret and a scope with a line break are refused")
     void validates() {
         assertThrows(IllegalArgumentException.class, () -> HistorySigner.hmacSha256("curto"));

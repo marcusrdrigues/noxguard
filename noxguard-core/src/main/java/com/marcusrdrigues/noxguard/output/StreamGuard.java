@@ -12,7 +12,7 @@ import java.util.List;
  * {@code longest marker - 1} characters, so a leak marker is always seen whole before any of its
  * characters is released. When a marker appears, nothing more is released and the status becomes
  * {@link StreamStatus.Tripped}. When the released text reaches the limit, the status becomes
- * {@link StreamStatus.Capped}.
+ * {@link StreamStatus.Capped}. An answer of exactly the limit is released whole, without the mark.
  *
  * <pre>{@code
  * StreamGuard guard = StreamGuard.builder()
@@ -109,7 +109,10 @@ public final class StreamGuard {
         return status;
     }
 
-    /** Full text received so far, released or not: for logs and end-of-answer checks. */
+    /**
+     * Text received until now, released or not, for logs and end-of-answer checks. Once the guard
+     * trips or caps, later pieces are no longer kept.
+     */
     public String received() {
         return received.toString();
     }
@@ -118,7 +121,7 @@ public final class StreamGuard {
         int room = maxChars - emitted;
         int end = Text.safeCut(received, Math.max(emitted, upTo));
         String out = received.substring(emitted, Math.max(emitted, end));
-        if (out.length() >= room) {
+        if (out.length() > room) {
             out = out.substring(0, Text.safeCut(out, Math.max(0, room)));
             status = new StreamStatus.Capped(maxChars);
         }
