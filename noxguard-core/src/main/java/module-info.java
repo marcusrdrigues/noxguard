@@ -1,0 +1,8 @@
+/**
+ * noxguard: deterministic guardrails for LLM chats and agents.
+ *
+ * <p>Only the API packages are exported. {@code com.marcusrdrigues.noxguard.internal} stays hidden.
+ */
+module com.marcusrdrigues.noxguard {
+    exports com.marcusrdrigues.noxguard.output;
+}
