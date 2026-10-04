@@ -1,0 +1,20 @@
+# Maven
+target/
+*.versionsBackup
+release.properties
+pom.xml.releaseBackup
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Secrets: never commit keys or tokens
+.env
+.env.*
+*.asc
+*.gpg
+settings-local.xml
