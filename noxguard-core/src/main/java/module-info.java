@@ -5,4 +5,6 @@
  */
 module com.marcusrdrigues.noxguard {
     exports com.marcusrdrigues.noxguard.output;
+    exports com.marcusrdrigues.noxguard.data;
+    exports com.marcusrdrigues.noxguard.history;
 }
