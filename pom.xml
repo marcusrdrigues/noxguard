@@ -83,6 +83,8 @@
           <configuration>
             <!-- Tests run on the class path; the module descriptor is still checked when main code compiles. -->
             <useModulePath>false</useModulePath>
+            <!-- A build that finds no test is a broken build, not a green one. -->
+            <failIfNoTests>true</failIfNoTests>
           </configuration>
         </plugin>
         <plugin>
