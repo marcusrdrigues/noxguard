@@ -2,9 +2,10 @@
 
 **Guardrails determinísticos para chats e agentes com LLM, em Java.** Uma guarda de saída para streaming que nunca deixa sair um vazamento e nunca segura a resposta inteira, lista de links permitidos, delimitação de dados, histórico assinado, portão de proposta para agentes e versões decodificadas da entrada para o seu classificador. Nenhuma dependência no núcleo.
 
+[![Maven Central](https://img.shields.io/maven-central/v/com.marcusrdrigues/noxguard-core)](https://central.sonatype.com/artifact/com.marcusrdrigues/noxguard-core)
+
 [Read in English](README.md)
 
-> **Situação: a 0.1.0 está sendo preparada para o Maven Central.** Até lá, instale a partir do código-fonte (abaixo).
 
 ## Por quê
 
@@ -31,7 +32,7 @@ O `noxguard-reactor` transforma um `Flux<String>` do Spring AI, do WebFlux ou de
 
 ## Instalação e uso
 
-Java 21 ou superior. As coordenadas Maven, os exemplos de código e os limites estão no [README em inglês](README.md#install), que é a referência. O app de exemplo com Spring Boot está em [`examples/chat-spring-boot`](examples/chat-spring-boot).
+Java 21 ou superior, no Maven Central como `com.marcusrdrigues:noxguard-core:0.1.0` (e `noxguard-reactor` para `Flux`). As coordenadas Maven, os exemplos de código e os limites estão no [README em inglês](README.md#install), que é a referência. O app de exemplo com Spring Boot está em [`examples/chat-spring-boot`](examples/chat-spring-boot).
 
 ## Limites, sem rodeio
 

@@ -3,11 +3,11 @@
 **Deterministic guardrails for LLM chats and agents, in Java.** A streaming output guard that never releases a leak and never buffers the answer, a link allow list, data delimiting, signed history, an agent proposal gate and input views for your classifier. No runtime dependencies in the core.
 
 [![CI](https://github.com/marcusrdrigues/noxguard/actions/workflows/ci.yml/badge.svg)](https://github.com/marcusrdrigues/noxguard/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/com.marcusrdrigues/noxguard-core)](https://central.sonatype.com/artifact/com.marcusrdrigues/noxguard-core)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [Leia em português](README.pt-BR.md)
 
-> **Status: 0.1.0 is being prepared for Maven Central.** Until it is published, build it from source (below).
 
 ## Why
 
@@ -60,7 +60,7 @@ Java 21 or later.
 </dependency>
 ```
 
-From source: `git clone https://github.com/marcusrdrigues/noxguard && cd noxguard && mvn install`.
+Gradle: `implementation("com.marcusrdrigues:noxguard-core:0.1.0")`. From source: `git clone https://github.com/marcusrdrigues/noxguard && cd noxguard && mvn install`.
 
 ## Quick start
 
