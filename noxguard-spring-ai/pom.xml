@@ -10,27 +10,24 @@
     <version>0.4.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>noxguard-reactor</artifactId>
-  <name>noxguard-reactor</name>
-  <description>Guards a Flux&lt;String&gt; model stream with noxguard: works with Spring AI, WebFlux or any Reactor stream.</description>
+  <artifactId>noxguard-spring-ai</artifactId>
+  <name>noxguard-spring-ai</name>
+  <description>Spring AI adapter for noxguard: every ToolCallback goes through the tool policy before it runs.</description>
 
   <dependencies>
     <dependency>
       <groupId>com.marcusrdrigues</groupId>
       <artifactId>noxguard-core</artifactId>
     </dependency>
+    <!-- Provided: the app already has Spring AI, and its version wins (docs/specs/0.4-spring-ai.md). -->
     <dependency>
-      <groupId>io.projectreactor</groupId>
-      <artifactId>reactor-core</artifactId>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-model</artifactId>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.projectreactor</groupId>
-      <artifactId>reactor-test</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -39,18 +36,22 @@
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
+        <artifactId>maven-jar-plugin</artifactId>
         <configuration>
-          <compilerArgs>
-            <!-- Reactor and Reactive Streams may be automatic modules; requiring them is expected here. -->
-            <arg>-Xlint:all,-requires-automatic,-requires-transitive-automatic</arg>
-            <arg>-Werror</arg>
-          </compilerArgs>
+          <archive>
+            <manifestEntries>
+              <Automatic-Module-Name>com.marcusrdrigues.noxguard.springai</Automatic-Module-Name>
+            </manifestEntries>
+          </archive>
         </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
+        <configuration>
+          <!-- No module-info here (Spring AI jars are automatic modules), as in the starter. -->
+          <detectOfflineLinks>false</detectOfflineLinks>
+        </configuration>
         <executions>
           <execution>
             <id>javadoc-jar</id>
