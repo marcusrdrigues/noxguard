@@ -14,12 +14,12 @@
 
   <groupId>com.marcusrdrigues.noxguard</groupId>
   <artifactId>chat-spring-boot-example</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.2.0-SNAPSHOT</version>
   <name>noxguard example: Example Books chat</name>
 
   <properties>
     <java.version>25</java.version>
-    <noxguard.version>0.1.0-SNAPSHOT</noxguard.version>
+    <noxguard.version>0.2.0-SNAPSHOT</noxguard.version>
     <spring-ai.version>2.0.1</spring-ai.version>
   </properties>
 
