@@ -61,6 +61,11 @@ public final class InputViews {
         this.commonWords = commonWords;
     }
 
+    /** Decoder with the Portuguese and English common words, the same one {@link #decoded(String)} uses. */
+    public static InputViews withDefaults() {
+        return DEFAULT;
+    }
+
     /**
      * Decoder whose ROT13 check uses these common words instead of the Portuguese and English
      * defaults: use the frequent short words of your users' languages, in lowercase.
