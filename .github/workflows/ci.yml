@@ -25,7 +25,12 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: maven
       - name: Build and test
-        run: mvn -B -ntp verify
+        run: mvn -B -ntp verify 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
+      - name: Report the build errors as an annotation
+        if: failure()
+        run: |
+          errors=$(grep -E '\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|expected:|AssertionFailedError' build.log | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+          echo "::error title=Build errors (Java ${{ matrix.java }})::${errors}"
       - name: Check the release build (sources, Javadoc, Central plugin), without signing
         if: matrix.java == '21'
         run: mvn -B -ntp -P release -Dgpg.skip verify
@@ -41,9 +46,9 @@ jobs:
           java-version: "25"
           cache: maven
       - name: Install the library
-        run: mvn -B -ntp install -DskipTests
+        run: mvn -B -ntp install -DskipTests 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
       - name: Build and test the example
-        run: mvn -B -ntp -f examples/chat-spring-boot/pom.xml verify
+        run: mvn -B -ntp -f examples/chat-spring-boot/pom.xml verify 2>&1 | tee -a build.log; exit ${PIPESTATUS[0]}
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
@@ -60,3 +65,8 @@ jobs:
       - name: Show the app log
         if: failure()
         run: cat app.log || true
+      - name: Report the build errors as an annotation
+        if: failure()
+        run: |
+          errors=$(grep -E '\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|expected:|AssertionFailedError|FAIL' build.log app.log 2>/dev/null | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+          echo "::error title=Example errors::${errors}"
