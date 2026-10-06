@@ -36,6 +36,7 @@
   <modules>
     <module>noxguard-core</module>
     <module>noxguard-reactor</module>
+    <module>noxguard-spring-boot-starter</module>
   </modules>
 
   <properties>
@@ -60,6 +61,11 @@
       <dependency>
         <groupId>com.marcusrdrigues</groupId>
         <artifactId>noxguard-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.marcusrdrigues</groupId>
+        <artifactId>noxguard-reactor</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
