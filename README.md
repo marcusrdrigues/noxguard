@@ -66,7 +66,7 @@ Java 21 or later.
   <artifactId>noxguard-reactor</artifactId>
   <version>0.4.0</version>
 </dependency>
-<!-- for Spring AI tools under the tool policy (Spring AI 2.0, provided by your app): -->
+<!-- for Spring AI tools under the tool policy (Spring AI 2.0.0 or later, not the 2.0 milestones; provided by your app): -->
 <dependency>
   <groupId>com.marcusrdrigues</groupId>
   <artifactId>noxguard-spring-ai</artifactId>
