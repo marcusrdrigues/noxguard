@@ -29,7 +29,7 @@ jobs:
       - name: Report the build errors as an annotation
         if: failure()
         run: |
-          errors=$(grep -E '\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|expected:|AssertionFailedError' build.log | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+          errors=$(grep -E 'warning:|error:|\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|expected:|AssertionFailedError' build.log | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
           echo "::error title=Build errors (Java ${{ matrix.java }})::${errors}"
       - name: Check the release build (sources, Javadoc, Central plugin), without signing
         if: matrix.java == '21'
@@ -68,5 +68,5 @@ jobs:
       - name: Report the build errors as an annotation
         if: failure()
         run: |
-          errors=$(grep -E '\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|expected:|AssertionFailedError|FAIL' build.log app.log 2>/dev/null | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+          errors=$(grep -E 'warning:|error:|\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|expected:|AssertionFailedError|FAIL' build.log app.log 2>/dev/null | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
           echo "::error title=Example errors::${errors}"
