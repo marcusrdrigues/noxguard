@@ -42,6 +42,11 @@
       <version>${noxguard.version}</version>
     </dependency>
     <dependency>
+      <groupId>com.marcusrdrigues</groupId>
+      <artifactId>noxguard-spring-boot-starter</artifactId>
+      <version>${noxguard.version}</version>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-webflux</artifactId>
     </dependency>

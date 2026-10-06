@@ -25,6 +25,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *       - name: get_case_study
  *         args:
  *           - name: slug
+ *             required: true
  *             pattern: '[a-z0-9-]{1,60}'
  *         log-args: [slug]
  *       - name: send_message
@@ -137,8 +138,9 @@ public record NoxguardProperties(String refusal, Stream stream, Links links, Dat
      * One argument of a tool.
      *
      * @param name Argument name.
+     * @param required Whether the argument must be present and not null.
      * @param pattern Regular expression the whole value must match. Empty: the argument is allowed with
      *     any value. Rules in code need a ToolPolicy bean of the app's own.
      */
-    public record Arg(String name, String pattern) {}
+    public record Arg(String name, boolean required, String pattern) {}
 }

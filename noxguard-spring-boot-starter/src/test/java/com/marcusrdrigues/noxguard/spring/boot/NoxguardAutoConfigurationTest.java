@@ -60,6 +60,7 @@ class NoxguardAutoConfigurationTest {
         p.put("noxguard.tools.allow[1].confirm", "true");
         p.put("noxguard.tools.allow[1].max-calls", "1");
         p.put("noxguard.tools.allow[1].args[0].name", "body");
+        p.put("noxguard.tools.allow[1].args[0].required", "true");
         return p;
     }
 
@@ -132,7 +133,7 @@ class NoxguardAutoConfigurationTest {
     }
 
     @Test
-    @DisplayName("the tool policy from properties: deny by default, patterns, confirm, limits, underscores kept")
+    @DisplayName("the tool policy from properties: deny by default, patterns, required, confirm, limits, underscores kept")
     void toolPolicyFromProperties() {
         try (AnnotationConfigApplicationContext context = start(full())) {
             ToolPolicy policy = context.getBean(ToolPolicy.class);
@@ -149,6 +150,10 @@ class NoxguardAutoConfigurationTest {
 
             assertEquals(ToolDecision.Reason.UNKNOWN_TOOL,
                     assertInstanceOf(ToolDecision.Deny.class, policy.session().decide(ToolCall.of("delete_orders"))).reason());
+
+            assertEquals(ToolDecision.Reason.ARGUMENT,
+                    assertInstanceOf(ToolDecision.Deny.class, policy.session().decide(ToolCall.of("send_message"))).reason(),
+                    "required: true");
 
             var session = policy.session();
             assertInstanceOf(ToolDecision.Confirm.class, session.decide(new ToolCall("send_message", Map.of("body", "Olá"))));

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.marcusrdrigues.noxguard.agent.ToolPolicy;
 import com.marcusrdrigues.noxguard.example.web.ChatResponse;
 import java.util.List;
 import java.util.Map;
@@ -73,5 +74,30 @@ class ChatControllerTest {
                 .bodyValue(Map.of("question", " "))
                 .exchange()
                 .expectStatus().isBadRequest();
+    }
+
+    private ChatResponse complete(String question) {
+        return client.post().uri("/api/chat/complete")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("question", question))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(ChatResponse.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
+    @Test
+    @DisplayName("the tool policy comes from application.yml through the starter")
+    void toolPolicyFromProperties() {
+        ToolPolicy policy = context.getBean(ToolPolicy.class);
+        assertEquals(List.of("check_stock", "propose_message"), policy.toolNames());
+        assertTrue(policy.requiresConfirmation("propose_message"));
+
+        assertEquals("Dune: In stock: 3 copies.", complete("Is \"Dune\" in stock?").answer());
+        assertEquals("I couldn't check that title. Ask with the book's name, like \"Dune\".", complete("Is \"../../etc/passwd\" in stock?").answer());
+        ChatResponse cancel = complete("Cancel my order 1042.");
+        assertEquals(List.of(new ChatResponse.ToolCall("cancel_order")), cancel.toolCalls());
+        assertTrue(cancel.answer().contains("hello@example.com"));
     }
 }

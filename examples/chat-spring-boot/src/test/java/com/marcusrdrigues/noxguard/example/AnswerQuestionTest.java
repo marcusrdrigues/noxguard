@@ -5,33 +5,67 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.marcusrdrigues.noxguard.agent.ArgRule;
+import com.marcusrdrigues.noxguard.agent.ToolCall;
+import com.marcusrdrigues.noxguard.agent.ToolPolicy;
+import com.marcusrdrigues.noxguard.data.DataEnvelope;
 import com.marcusrdrigues.noxguard.example.application.AnswerQuestion;
+import com.marcusrdrigues.noxguard.example.application.ChatPolicy;
 import com.marcusrdrigues.noxguard.example.application.InvalidQuestionException;
 import com.marcusrdrigues.noxguard.example.application.Question;
 import com.marcusrdrigues.noxguard.example.domain.ChatEvent;
+import com.marcusrdrigues.noxguard.example.domain.LanguageModel;
+import com.marcusrdrigues.noxguard.example.domain.ModelChunk;
+import com.marcusrdrigues.noxguard.example.domain.ModelRequest;
 import com.marcusrdrigues.noxguard.example.infrastructure.ExampleBooksKnowledgeBase;
-import com.marcusrdrigues.noxguard.example.infrastructure.GuardConfiguration;
+import com.marcusrdrigues.noxguard.example.infrastructure.ExampleBooksTools;
 import com.marcusrdrigues.noxguard.example.infrastructure.ScriptedLanguageModel;
 import com.marcusrdrigues.noxguard.history.HistorySigner;
 import com.marcusrdrigues.noxguard.history.Turn;
+import com.marcusrdrigues.noxguard.output.LinkPolicy;
+import com.marcusrdrigues.noxguard.output.StreamGuard;
+import com.marcusrdrigues.noxguard.reactor.ReactorGuard;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
+import reactor.core.publisher.Flux;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** The use case with the real guards and the scripted model, without Spring. */
+/**
+ * The use case with the real guards and the scripted model, without Spring. The guards are built here
+ * with the values of {@code application.yml}; ChatControllerTest checks the same through the starter.
+ */
 class AnswerQuestionTest {
 
     private static final String REFUSAL = "I only answer questions about Example Books.";
     private static final HistorySigner SIGNER = HistorySigner.hmacSha256("t".repeat(32));
 
-    private final AnswerQuestion chat = wire();
+    private static final ToolPolicy TOOLS = ToolPolicy.builder()
+            .tool("check_stock", t -> t
+                    .arg("title", ArgRule.required(), ArgRule.matches("[\\p{L}\\p{N} ',.:!?-]{1,80}"))
+                    .logArgs("title"))
+            .tool("propose_message", t -> t
+                    .confirm()
+                    .maxCalls(1)
+                    .arg("subject", ArgRule.required(), ArgRule.matches("[^\\n]{1,120}"))
+                    .arg("message", ArgRule.required(), ArgRule.matches("(?s).{1,2000}"))
+                    .logArgs("subject"))
+            .maxCalls(3)
+            .build();
 
-    private static AnswerQuestion wire() {
-        GuardConfiguration config = new GuardConfiguration();
-        var policy = config.chatPolicy();
-        return new AnswerQuestion(policy, new ExampleBooksKnowledgeBase(), new ScriptedLanguageModel(),
-                config.reactorGuard(policy, config.linkPolicy()), config.dataEnvelope(), SIGNER);
+    private final AnswerQuestion chat = wire(new ScriptedLanguageModel());
+
+    private static AnswerQuestion wire(LanguageModel model) {
+        ReactorGuard guard = ReactorGuard.builder()
+                .streamGuard(() -> StreamGuard.builder().leakMarkers(List.of("You are Ava", "<context>", "<question>", "<history>")).maxChars(1200).build())
+                .links(LinkPolicy.allow(Pattern.compile("^([a-z0-9-]+\\.)*example\\.com$")))
+                .refusal(REFUSAL)
+                .build();
+        return new AnswerQuestion(ChatPolicy.exampleBooks(REFUSAL), new ExampleBooksKnowledgeBase(), model, guard,
+                DataEnvelope.withReservedTags(List.of("context", "question", "history")), SIGNER, TOOLS, new ExampleBooksTools());
     }
 
     private List<ChatEvent> ask(String question, List<Turn> history) {
@@ -120,5 +154,45 @@ class AnswerQuestionTest {
         assertTrue(events.contains(new ChatEvent.Replace(REFUSAL, "EMPTY")));
         assertThrows(InvalidQuestionException.class, () -> chat.answer(new Question("  ​ ", List.of())));
         assertThrows(InvalidQuestionException.class, () -> chat.answer(new Question("a".repeat(501), List.of())));
+    }
+
+    @Test
+    @DisplayName("a declared read-only tool runs, and the model answers from its result")
+    void toolRuns() {
+        ChatEvent.Done done = done(ask("Is \"Dune\" in stock?", List.of()));
+        assertEquals("Dune: In stock: 3 copies.", done.answer());
+        assertEquals(List.of("check_stock"), done.tools());
+    }
+
+    @Test
+    @DisplayName("a title that breaks the argument rule never reaches the tool")
+    void badArgumentIsDenied() {
+        ChatEvent.Done done = done(ask("Is \"../../etc/passwd\" in stock?", List.of()));
+        assertEquals("I couldn't check that title. Ask with the book's name, like \"Dune\".", done.answer());
+        assertEquals(List.of("check_stock"), done.tools(), "the model did try");
+    }
+
+    @Test
+    @DisplayName("deny by default: a tool the model was never given is refused")
+    void unknownToolIsDenied() {
+        ChatEvent.Done done = done(ask("Cancel my order 1042.", List.of()));
+        assertEquals(List.of("cancel_order"), done.tools());
+        assertTrue(done.answer().contains("hello@example.com"), done.answer());
+        assertFalse(done.answer().toLowerCase().contains("cancelled"));
+    }
+
+    @Test
+    @DisplayName("a model that never stops calling tools still ends: three calls, then tools are off")
+    void toolLoopEnds() {
+        List<ModelRequest> requests = new ArrayList<>();
+        LanguageModel greedy = request -> {
+            requests.add(request);
+            return Flux.just(new ModelChunk.ToolUse(new ToolCall("check_stock", Map.of("title", "Dune"))), new ModelChunk.Text("ok"));
+        };
+        List<ChatEvent> events = wire(greedy).answer(new Question("Is it in stock?", List.of())).collectList().block();
+        assertEquals(4, requests.size(), "three passes with tools, one without");
+        assertEquals(List.of(true, true, true, false), requests.stream().map(ModelRequest::toolsAllowed).toList());
+        assertEquals(3, requests.getLast().toolResults().size(), "the call made after the cap is ignored, not run");
+        assertEquals(4, done(events).tools().size());
     }
 }

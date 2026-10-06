@@ -1,10 +1,45 @@
 server:
   port: ${PORT:8080}
 
+# The guards, built by noxguard-spring-boot-starter. An unsafe setting here stops the app at startup.
 noxguard:
-  example:
-    # At least 32 bytes. Without it, the app makes a random one at startup (signatures then die with the process).
-    history-secret: ${NOXGUARD_HISTORY_SECRET:}
+  refusal: "I only answer questions about Example Books."
+  stream:
+    # Pieces of the instructions that must never reach the visitor, and the longest answer shown.
+    leak-markers: ["You are Ava", "<context>", "<question>", "<history>"]
+    max-chars: 1200
+  links:
+    allow: ['^([a-z0-9-]+\.)*example\.com$']
+  data:
+    reserved-tags: [context, question, history]
+  history:
+    # At least 32 bytes.
+    secret: ${NOXGUARD_HISTORY_SECRET:}
+    # Only because this is a demo: without a secret, a random one (signatures then die with the process).
+    # A real app leaves this off, so a missing secret is noticed.
+    random-secret-for-development: true
+  tools:
+    # Deny by default: the model may call these two tools and nothing else, three calls per answer at most.
+    max-calls: 3
+    allow:
+      - name: check_stock
+        args:
+          - name: title
+            required: true
+            pattern: "[\\p{L}\\p{N} ',.:!?-]{1,80}"
+        log-args: [title]
+      - name: propose_message
+        # A side effect: never runs here. It becomes a draft the visitor confirms.
+        confirm: true
+        max-calls: 1
+        args:
+          - name: subject
+            required: true
+            pattern: "[^\\n]{1,120}"
+          - name: message
+            required: true
+            pattern: "(?s).{1,2000}"
+        log-args: [subject]
 
 spring:
   ai:

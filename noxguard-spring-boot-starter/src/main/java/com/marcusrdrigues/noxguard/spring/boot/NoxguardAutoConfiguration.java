@@ -139,22 +139,21 @@ public class NoxguardAutoConfiguration {
                 if (arg.name() == null || arg.name().isBlank()) {
                     throw invalid(argPath + ".name", "is required", null);
                 }
-                String pattern = arg.pattern();
-                if (pattern == null || pattern.isEmpty()) {
-                    args.add(new ArgRuleSpec(arg.name(), null));
-                } else {
-                    compile(pattern, argPath + ".pattern");
-                    args.add(new ArgRuleSpec(arg.name(), ArgRule.matches(pattern)));
+                List<ArgRule> rules = new ArrayList<>();
+                if (arg.required()) {
+                    rules.add(ArgRule.required());
                 }
+                String pattern = arg.pattern();
+                if (pattern != null && !pattern.isEmpty()) {
+                    compile(pattern, argPath + ".pattern");
+                    rules.add(ArgRule.matches(pattern));
+                }
+                args.add(new ArgRuleSpec(arg.name(), List.copyOf(rules)));
             }
             try {
                 builder.tool(tool.name(), t -> {
                     for (ArgRuleSpec arg : args) {
-                        if (arg.rule() == null) {
-                            t.arg(arg.name());
-                        } else {
-                            t.arg(arg.name(), arg.rule());
-                        }
+                        t.arg(arg.name(), arg.rules().toArray(ArgRule[]::new));
                     }
                     t.logArgs(tool.logArgs().toArray(String[]::new));
                     if (tool.confirm()) {
@@ -171,7 +170,7 @@ public class NoxguardAutoConfiguration {
         return builder.build();
     }
 
-    private record ArgRuleSpec(String name, ArgRule rule) {}
+    private record ArgRuleSpec(String name, List<ArgRule> rules) {}
 
     private static Pattern compile(String regex, String property) {
         if (regex == null) {
