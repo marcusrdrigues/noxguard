@@ -3,7 +3,10 @@ package com.marcusrdrigues.noxguard.spring.boot;
 import com.marcusrdrigues.noxguard.agent.ArgRule;
 import com.marcusrdrigues.noxguard.agent.ToolPolicy;
 import com.marcusrdrigues.noxguard.data.DataEnvelope;
+import com.marcusrdrigues.noxguard.grounding.CitationGuard;
 import com.marcusrdrigues.noxguard.history.HistorySigner;
+import com.marcusrdrigues.noxguard.input.GuardedClassifier;
+import com.marcusrdrigues.noxguard.input.InputClassifier;
 import com.marcusrdrigues.noxguard.output.LinkPolicy;
 import com.marcusrdrigues.noxguard.output.StreamGuard;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +16,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -28,15 +32,19 @@ import org.springframework.context.annotation.Conditional;
  *   <li>{@link HistorySigner}: when {@code noxguard.history.secret} is set (or
  *       {@code random-secret-for-development}, with a warning);
  *   <li>{@link StreamGuards}: when {@code noxguard.stream.leak-markers} is set;
- *   <li>{@link ToolPolicy}: when {@code noxguard.tools.allow} declares a tool.
+ *   <li>{@link ToolPolicy}: when {@code noxguard.tools.allow} declares a tool;
+ *   <li>{@link CitationGuard}: when {@code noxguard.citations.allow-names} is set;
+ *   <li>{@link GuardedClassifier}: when the app defines an {@link InputClassifier} bean, with
+ *       {@code noxguard.input.on-failure} and {@code noxguard.input.timeout}.
  * </ul>
  *
  * <p>Unsafe or meaningless settings stop the app at startup, with the property named: a history secret
  * under 32 bytes, an invalid regular expression, leak markers without {@code max-chars}, tools without
- * {@code noxguard.tools.max-calls}, a tool with {@code max-calls: 0}.
+ * {@code noxguard.tools.max-calls}, a tool with {@code max-calls: 0}, an input classifier without
+ * {@code noxguard.input.on-failure} or {@code noxguard.input.timeout}.
  */
 @AutoConfiguration
-@EnableConfigurationProperties(NoxguardProperties.class)
+@EnableConfigurationProperties({NoxguardProperties.class, NoxguardCitationProperties.class, NoxguardInputProperties.class})
 public class NoxguardAutoConfiguration {
 
     private static final System.Logger LOG = System.getLogger(NoxguardAutoConfiguration.class.getName());
@@ -168,6 +176,37 @@ public class NoxguardAutoConfiguration {
             }
         }
         return builder.build();
+    }
+
+    /** Checks the citations of RAG answers; the configured names never need a source. */
+    @Bean
+    @ConditionalOnMissingBean
+    @Conditional(NoxguardConditions.OnCitationNames.class)
+    public CitationGuard noxguardCitationGuard(NoxguardCitationProperties properties) {
+        try {
+            return CitationGuard.builder().allowNames(properties.allowNames()).build();
+        } catch (IllegalArgumentException e) {
+            throw invalid("noxguard.citations.allow-names:", e.getMessage(), e);
+        }
+    }
+
+    /** The app's input classifier with a timeout and the failure mode it chose: there is no default. */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(InputClassifier.class)
+    public GuardedClassifier noxguardGuardedClassifier(InputClassifier classifier, NoxguardInputProperties properties) {
+        if (properties.onFailure() == null) {
+            throw invalid("noxguard.input.on-failure", "is required with an InputClassifier bean: fail-open (the message passes, "
+                    + "counted as unavailable) or fail-closed (it is blocked) when the classifier is down", null);
+        }
+        if (properties.timeout() == null) {
+            throw invalid("noxguard.input.timeout", "is required with an InputClassifier bean, such as 800ms", null);
+        }
+        try {
+            return GuardedClassifier.of(classifier).timeout(properties.timeout()).onFailure(properties.onFailure()).build();
+        } catch (IllegalArgumentException e) {
+            throw invalid("noxguard.input.timeout:", e.getMessage(), e);
+        }
     }
 
     private record ArgRuleSpec(String name, List<ArgRule> rules) {}

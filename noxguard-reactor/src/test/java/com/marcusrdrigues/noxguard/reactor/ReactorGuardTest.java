@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.marcusrdrigues.noxguard.grounding.CitationGuard;
 import com.marcusrdrigues.noxguard.output.LinkPolicy;
 import com.marcusrdrigues.noxguard.output.StreamGuard;
 import com.marcusrdrigues.noxguard.output.StreamStatus;
@@ -131,6 +132,81 @@ class ReactorGuardTest {
         assertThrows(IllegalArgumentException.class, () -> ReactorGuard.builder()
                 .streamGuard(() -> StreamGuard.builder().leakMarkers(List.of("x")).maxChars(10).build())
                 .refusal(" ")
+                .build());
+    }
+
+    private static final List<String> SOURCES = List.of(
+            "Marcus trabalha na Vibetex desde mar/2026, com Java e Spring Boot.",
+            "O Nox respondeu 47 perguntas na bateria oficial.");
+    private static final String NOT_CONFIRMED = "Não encontrei isso confirmado no site.";
+
+    private static ReactorGuard citing() {
+        return ReactorGuard.builder()
+                .streamGuard(() -> StreamGuard.builder().leakMarkers(List.of("Você é Nox")).maxChars(1200).build())
+                .refusal(REFUSAL)
+                .citations(CitationGuard.builder().allowNames(List.of("Marcus Rodrigues", "Nox")).build(), NOT_CONFIRMED)
+                .build();
+    }
+
+    private static List<GuardEvent> cited(Flux<String> model) {
+        return citing().guard(model, () -> SOURCES, "Onde ele trabalha?").collectList().block();
+    }
+
+    @Test
+    @DisplayName("citations: a supported answer streams out whole, with no Replace")
+    void citationsSupported() {
+        List<GuardEvent> events = cited(Flux.just("Marcus trabalha ", "na Vibetex [1]."));
+        assertEquals("Marcus trabalha na Vibetex [1].", shown(events));
+        assertTrue(events.stream().noneMatch(GuardEvent.Replace.class::isInstance), events.toString());
+        assertInstanceOf(GuardEvent.Done.class, events.getLast());
+    }
+
+    @Test
+    @DisplayName("citations: a miscited sentence comes back recited, an invented one removed")
+    void citationsCorrected() {
+        List<GuardEvent> recited = cited(Flux.just("O Nox respondeu ", "47 perguntas [1]."));
+        assertEquals(new GuardEvent.Replace("O Nox respondeu 47 perguntas [1][2].", GuardEvent.Reason.CITATIONS), recited.get(recited.size() - 2));
+
+        List<GuardEvent> removed = cited(Flux.just("Marcus trabalha na Vibetex [1]. ", "Ele ganhou 3 prêmios [1]."));
+        assertEquals(new GuardEvent.Replace("Marcus trabalha na Vibetex [1].", GuardEvent.Reason.CITATIONS), removed.get(removed.size() - 2));
+        assertInstanceOf(GuardEvent.Done.class, removed.getLast());
+    }
+
+    @Test
+    @DisplayName("citations: the sources are read when the answer ends, so a tool result from mid-stream counts")
+    void citationsReadSourcesAtTheEnd() {
+        List<String> sources = new java.util.ArrayList<>(List.of(SOURCES.get(0)));
+        Flux<String> model = Flux.just("O Nox respondeu ", "47 perguntas [2].").doOnComplete(() -> sources.add(SOURCES.get(1)));
+        List<GuardEvent> events = citing().guard(model, () -> List.copyOf(sources), "").collectList().block();
+        assertEquals("O Nox respondeu 47 perguntas [2].", shown(events));
+        assertTrue(events.stream().noneMatch(GuardEvent.Replace.class::isInstance), events.toString());
+    }
+
+    @Test
+    @DisplayName("citations: nothing cited left means the app's 'not confirmed' text")
+    void citationsNotConfirmed() {
+        assertEquals(new GuardEvent.Replace(NOT_CONFIRMED, GuardEvent.Reason.NOT_CONFIRMED),
+                cited(Flux.just("Marcus ganhou o Nobel em 2024 [1].")).reversed().get(1));
+    }
+
+    @Test
+    @DisplayName("citations: a leak still wins, and the check never runs on a refused answer")
+    void citationsAfterLeak() {
+        List<GuardEvent> events = cited(Flux.just("Claro: Você é Nox", " [1]."));
+        assertEquals(new GuardEvent.Replace(REFUSAL, GuardEvent.Reason.LEAK), events.get(events.size() - 2));
+        assertEquals(1, events.stream().filter(GuardEvent.Replace.class::isInstance).count());
+    }
+
+    @Test
+    @DisplayName("citations: the call must match the configuration, and the 'not confirmed' text can't be blank")
+    void citationsConfiguration() {
+        IllegalStateException withoutSources = assertThrows(IllegalStateException.class, () -> citing().guard(Flux.just("oi")));
+        assertTrue(withoutSources.getMessage().contains("guard(modelStream, sources, question)"));
+        assertThrows(IllegalStateException.class, () -> guard(1200).guard(Flux.just("oi"), () -> SOURCES, ""));
+        assertThrows(IllegalArgumentException.class, () -> ReactorGuard.builder()
+                .streamGuard(() -> StreamGuard.builder().leakMarkers(List.of("x")).maxChars(10).build())
+                .refusal("não")
+                .citations(CitationGuard.builder().build(), " ")
                 .build());
     }
 }

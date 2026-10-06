@@ -8,7 +8,7 @@ import java.util.Objects;
  * the end.
  *
  * <p>Map these to your wire format (one JSON line per event, server-sent events). A client that already
- * showed some text must handle {@link Replace}: it swaps the whole answer for the refusal.
+ * showed some text must handle {@link Replace}: it swaps the whole answer for the event's text.
  */
 public sealed interface GuardEvent permits GuardEvent.Delta, GuardEvent.Replace, GuardEvent.Done {
 
@@ -27,7 +27,7 @@ public sealed interface GuardEvent permits GuardEvent.Delta, GuardEvent.Replace,
     /**
      * The whole answer shown so far must be replaced by this text.
      *
-     * @param text the app's refusal
+     * @param text the app's refusal, its "not confirmed" text, or the answer after the citation check
      * @param reason why the answer was replaced
      */
     record Replace(String text, Reason reason) implements GuardEvent {
@@ -57,6 +57,10 @@ public sealed interface GuardEvent permits GuardEvent.Delta, GuardEvent.Replace,
         /** The answer had a link outside the allow list. */
         FOREIGN_LINK,
         /** The model sent no text. */
-        EMPTY
+        EMPTY,
+        /** The citation check removed sentences or corrected citations; the text is the checked answer. */
+        CITATIONS,
+        /** The citation check left no cited sentence; the text is the app's "not confirmed" text. */
+        NOT_CONFIRMED
     }
 }

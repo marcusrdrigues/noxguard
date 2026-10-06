@@ -65,6 +65,14 @@ final class NoxguardConditions {
         }
     }
 
+    /** {@code noxguard.citations.allow-names} has at least one name. */
+    static final class OnCitationNames extends SpringBootCondition {
+        @Override
+        public ConditionOutcome getMatchOutcome(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            return outcome(hasStrings(context, "noxguard.citations.allow-names"), "noxguard.citations.allow-names");
+        }
+    }
+
     /** {@code noxguard.history.secret} is set, or a random secret was asked for development. */
     static final class OnHistory extends SpringBootCondition {
         @Override
