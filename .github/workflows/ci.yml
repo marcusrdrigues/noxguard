@@ -54,19 +54,19 @@ jobs:
           node-version: "24"
       - name: Run noxeval against the example
         run: |
-          java -jar examples/chat-spring-boot/target/chat-spring-boot-example-0.2.0-SNAPSHOT.jar --server.port=8080 > app.log 2>&1 &
+          java -jar examples/chat-spring-boot/target/chat-spring-boot-example-*.jar --server.port=8080 > app.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf -o /dev/null -X POST -H 'content-type: application/json' -d '{"question":"Where is the store?"}' http://localhost:8080/api/chat/complete && break
             sleep 1
           done
           cd examples/chat-spring-boot/eval
           npm ci
-          npx noxeval run
+          npx noxeval run 2>&1 | tee ../../../eval.log; exit ${PIPESTATUS[0]}
       - name: Show the app log
         if: failure()
         run: cat app.log || true
       - name: Report the build errors as an annotation
         if: failure()
         run: |
-          errors=$(grep -E 'warning:|error:|\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|expected:|AssertionFailedError|FAIL' build.log app.log 2>/dev/null | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+          errors=$({ grep -E 'warning:|error:|\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|expected:|AssertionFailedError|FAIL' build.log app.log 2>/dev/null | head -40; tail -n 30 eval.log 2>/dev/null; } | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
           echo "::error title=Example errors::${errors}"
