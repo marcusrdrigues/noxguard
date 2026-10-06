@@ -317,4 +317,32 @@ class ToolPolicyTest {
         assertThrows(UnsupportedOperationException.class, () -> call.args().put("x", 1));
         assertThrows(NullPointerException.class, () -> new ToolCall(null, Map.of()));
     }
+
+    @Test
+    @DisplayName("invalidArguments: denied, counted in the answer's total, never in the tool's own cap")
+    void invalidArguments() {
+        ToolSession session = nox().session();
+        ToolDecision.Deny bad = denied(session.invalidArguments("get_case_study"), Reason.ARGUMENT);
+        assertEquals("Error: the arguments are not a valid JSON object; send an object with: slug.", bad.messageForModel());
+        assertEquals(Optional.empty(), bad.argument(), "no argument could be read");
+        assertEquals(1, session.used());
+        assertEquals("Error: the arguments are not a valid JSON object; send an empty object {}.",
+                session.invalidArguments("list_projects").messageForModel());
+
+        // send_message is allowed once per answer: the malformed attempt did not use it up.
+        ToolSession once = nox().session();
+        denied(once.invalidArguments("send_message"), Reason.ARGUMENT);
+        assertInstanceOf(ToolDecision.Confirm.class, once.decide(call("send_message", "subject", "Oi", "body", "Olá")));
+
+        ToolDecision.Deny unknown = denied(nox().session().invalidArguments("delete_everything"), Reason.UNKNOWN_TOOL);
+        assertFalse(unknown.messageForModel().contains("delete_everything"), "never echoes the model's name");
+
+        ToolSession spent = nox().session();
+        for (int i = 0; i < 3; i++) {
+            spent.invalidArguments("search_site");
+        }
+        denied(spent.invalidArguments("search_site"), Reason.LIMIT);
+        denied(spent.decide(call("list_projects")), Reason.LIMIT);
+        assertThrows(NullPointerException.class, () -> nox().session().invalidArguments(null));
+    }
 }
