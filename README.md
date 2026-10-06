@@ -217,7 +217,7 @@ GuardedToolCallbacks guarded = GuardedToolCallbacks.builder(policy)
         .build();                                                 // throws when a tool has no rule in the policy
 
 AnswerTools answer = guarded.forNewAnswer();                      // one per request: its own session and limits
-String text = chatClient.prompt(question).toolCallbacks(answer.callbacks()).call().content();
+String text = chatClient.prompt(question).tools(answer.callbacks()).call().content();
 answer.release(isRefusal(text)).ifPresent(held -> showForConfirmation(held.call()));
 // when the person confirms: held.run()   (runs the original tool once)
 ```

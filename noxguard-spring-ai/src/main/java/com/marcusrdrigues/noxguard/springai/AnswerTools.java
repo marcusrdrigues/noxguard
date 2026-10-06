@@ -15,7 +15,7 @@ import org.springframework.ai.tool.ToolCallback;
  *
  * <pre>{@code
  * AnswerTools answer = guarded.forNewAnswer();
- * String text = chatClient.prompt(question).toolCallbacks(answer.callbacks()).call().content();
+ * String text = chatClient.prompt(question).tools(answer.callbacks()).call().content();
  * answer.release(isRefusal(text)).ifPresent(held -> showForConfirmation(held.call()));
  * }</pre>
  *
@@ -36,7 +36,7 @@ public final class AnswerTools {
         this.callbacks = tools.stream().<ToolCallback>map(tool -> new GuardedToolCallback(tool, this, guarded)).toList();
     }
 
-    /** The guarded callbacks, for {@code ChatClient.prompt().toolCallbacks(...)} or a {@code ToolCallingChatOptions}. */
+    /** The guarded callbacks, for {@code ChatClient.prompt().tools(...)} (it takes the list as is) or a {@code ToolCallingChatOptions}. */
     public List<ToolCallback> callbacks() {
         return callbacks;
     }

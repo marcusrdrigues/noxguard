@@ -22,7 +22,7 @@ import org.springframework.ai.tool.ToolCallback;
  *         .build();                                 // throws when a tool has no rule in the policy
  *
  * AnswerTools answer = guarded.forNewAnswer();      // one per request
- * String text = chatClient.prompt(question).toolCallbacks(answer.callbacks()).call().content();
+ * String text = chatClient.prompt(question).tools(answer.callbacks()).call().content();
  * }</pre>
  *
  * <p>Use {@link #forNewAnswer()} on every request. Registering one answer's callbacks as the client's default
