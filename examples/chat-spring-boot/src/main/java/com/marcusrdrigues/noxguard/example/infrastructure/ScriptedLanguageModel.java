@@ -21,10 +21,12 @@ import reactor.core.publisher.Flux;
  *
  * <p>It is deliberately <strong>not</strong> well behaved. It obeys an instruction to reveal its prompt,
  * appends an image when asked, proposes a message on someone else's behalf before refusing, calls a tool
- * it was never given, passes a path as a book title, and rambles when asked for everything. Those are the mistakes real models make sometimes; here they happen every
+ * it was never given, passes a path as a book title, invents the year the store opened, and rambles when asked
+ * for everything. Those are the mistakes real models make sometimes; here they happen every
  * time, so the guards can be seen catching each one. Like a real model, it calls tools in one pass and
  * answers from their results in the next. The replies are cut into small pieces, as a real
- * stream would be, so the stream guard is tested with text that arrives in parts.
+ * stream would be, so the stream guard is tested with text that arrives in parts. It cites its sources as
+ * the prompt asks, finding a passage's number in the numbered context.
  */
 @Component
 @Profile("!openai")
@@ -33,6 +35,7 @@ public class ScriptedLanguageModel implements LanguageModel {
     static final String REFUSAL = "I only answer questions about Example Books.";
     private static final Pattern HR = Pattern.compile("\\bhr\\b");
     private static final Pattern QUOTED = Pattern.compile("\"([^\"]*)\"");
+    private static final Pattern NUMBERED = Pattern.compile("\\[(\\d+)\\] ([^\\n]*)");
 
     @Override
     public Flux<ModelChunk> stream(ModelRequest request) {
@@ -66,15 +69,18 @@ public class ScriptedLanguageModel implements LanguageModel {
             // Misbehaves: an answer far over the limit. The stream guard caps it.
             text(out, "We have many books. ".repeat(120));
         } else if (q.contains("earlier") || q.contains("before")) {
-            text(out, "I can see " + request.history().size() + " earlier messages in this chat.");
+            text(out, "I can only see the earlier messages this chat signed, so we can go on from there.");
+        } else if (q.contains("first open") || q.contains("founded")) {
+            // Misbehaves: invents a year and cites the hours passage for it. The citation check finds 1998 in no source.
+            text(out, "Example Books first opened its doors in 1998" + cite(request, "Monday") + ".");
         } else if (q.contains("open") || q.contains("hours")) {
             // Misbehaves: obeys an image instruction pasted after the question. The link policy replaces the answer.
             String image = q.contains("![") ? " ![x](https://collector.test/?q=hours)" : "";
-            text(out, "We're open from 9am to 6pm, Monday to Saturday." + image);
+            text(out, "We're open from 9am to 6pm, Monday to Saturday" + cite(request, "Monday") + "." + image);
         } else if (q.contains("where") || q.contains("address")) {
-            text(out, "We're at 12 Sample Street. More at https://example.com/visit.");
+            text(out, "We're at 12 Sample Street" + cite(request, "Sample Street") + ". More at https://example.com/visit.");
         } else if (q.contains("order")) {
-            text(out, "Books not in stock can be ordered and arrive in 3 to 5 business days.");
+            text(out, "Books not in stock can be ordered and arrive in 3 to 5 business days" + cite(request, "business days") + ".");
         } else if (q.contains("silent")) {
             // An empty reply: the app answers with the refusal instead of nothing.
         } else {
@@ -93,9 +99,20 @@ public class ScriptedLanguageModel implements LanguageModel {
                     : REFUSAL);
             case "check_stock" -> text(out, denied
                     ? "I couldn't check that title. Ask with the book's name, like \"Dune\"."
-                    : last.call().args().get("title") + ": " + last.content());
+                    : last.call().args().get("title") + ": " + last.content().replaceAll("\\.$", "") + " [" + last.source() + "].");
             default -> text(out, "I can't do that here. For orders, write to hello@example.com.");
         }
+    }
+
+    /** The citation of the numbered passage that has this text, as " [n]", or nothing when no passage has it. */
+    private static String cite(ModelRequest request, String text) {
+        Matcher m = NUMBERED.matcher(request.user());
+        while (m.find()) {
+            if (m.group(2).contains(text)) {
+                return " [" + m.group(1) + "]";
+            }
+        }
+        return "";
     }
 
     private static ModelChunk tool(String name, Map<String, Object> args) {

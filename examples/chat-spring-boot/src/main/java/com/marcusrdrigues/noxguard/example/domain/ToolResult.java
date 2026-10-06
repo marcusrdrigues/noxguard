@@ -8,5 +8,6 @@ import com.marcusrdrigues.noxguard.agent.ToolCall;
  *
  * @param call the call the model made
  * @param content the text the model reads
+ * @param source the number the model cites it by, after the passages: with two passages, the first result is [3]
  */
-public record ToolResult(ToolCall call, String content) {}
+public record ToolResult(ToolCall call, String content, int source) {}

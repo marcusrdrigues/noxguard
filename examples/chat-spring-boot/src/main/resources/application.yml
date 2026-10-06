@@ -12,6 +12,10 @@ noxguard:
     allow: ['^([a-z0-9-]+\.)*example\.com$']
   data:
     reserved-tags: [context, question, history]
+  citations:
+    # Names an answer may say without a source. Every other name, number and acronym must be in a passage
+    # or tool result the model received: a wrong citation is corrected, a detail found nowhere removes the sentence.
+    allow-names: [Example Books, Ava]
   history:
     # At least 32 bytes.
     secret: ${NOXGUARD_HISTORY_SECRET:}

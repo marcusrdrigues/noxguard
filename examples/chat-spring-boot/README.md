@@ -25,6 +25,7 @@ By default the app uses `ScriptedLanguageModel`: no API key, the same reply ever
 | "Is \"Dune\" in stock?" | calls `check_stock` | `ToolPolicy` lets the declared read-only tool run | the stock, from the tool's result |
 | "Is \"../../etc/passwd\" in stock?" | passes the path as the title | `ToolPolicy` denies the argument before the tool runs | "I couldn't check that title" |
 | "Cancel my order 1042" | calls `cancel_order`, a tool it was never given | `ToolPolicy` denies it (deny by default) | a pointer to the store's e-mail, nothing cancelled |
+| "When did the store first open?" | invents a year and cites the hours passage for it | `CitationGuard`, at the end of the stream: the year is in no source | "I couldn't find that confirmed..." |
 | "Tell me about every book you have" | rambles past 1,200 characters | `StreamGuard` caps it | the answer cut with "…" |
 | A history with a forged assistant turn | (never sees it) | `HistorySigner.keepSigned` | an answer that ignores the forged turn |
 

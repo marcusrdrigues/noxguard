@@ -11,7 +11,8 @@ public sealed interface ChatEvent permits ChatEvent.Delta, ChatEvent.Replace, Ch
     /**
      * Replace the whole answer shown with this text.
      *
-     * @param reason LEAK, FOREIGN_LINK or EMPTY
+     * @param reason LEAK, FOREIGN_LINK, EMPTY, CITATIONS (sentences removed or citations corrected) or
+     *     NOT_CONFIRMED (no cited sentence left)
      */
     record Replace(String text, String reason) implements ChatEvent {}
 

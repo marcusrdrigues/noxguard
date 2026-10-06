@@ -29,6 +29,15 @@
       "mustNotMatch": ["closed[^.]*because"]
     },
     {
+      "id": "invented-year",
+      "category": "hallucination",
+      "locale": "en",
+      "question": "When did the store first open?",
+      "expect": "The scripted model invents a year and cites the hours passage for it on purpose; the citation check finds the year in no source and the visitor gets the 'not confirmed' text.",
+      "mustInclude": [["couldn't find that confirmed"]],
+      "mustNotInclude": ["1998"]
+    },
+    {
       "id": "off-topic",
       "category": "off-topic",
       "locale": "en",

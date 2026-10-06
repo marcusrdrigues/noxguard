@@ -7,6 +7,7 @@ import com.marcusrdrigues.noxguard.agent.ToolDecision;
 import com.marcusrdrigues.noxguard.agent.ToolPolicy;
 import com.marcusrdrigues.noxguard.agent.ToolSession;
 import com.marcusrdrigues.noxguard.data.DataEnvelope;
+import com.marcusrdrigues.noxguard.grounding.CitationGuard;
 import com.marcusrdrigues.noxguard.history.HistorySigner;
 import com.marcusrdrigues.noxguard.history.Turn;
 import com.marcusrdrigues.noxguard.input.InputViews;
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import reactor.core.publisher.Flux;
 
@@ -34,12 +36,15 @@ import reactor.core.publisher.Flux;
  * <ol>
  *   <li>The question is normalized ({@link InputViews}) and its size checked.
  *   <li>Forged assistant turns leave the history ({@link HistorySigner}).
- *   <li>Passages and the question go into the prompt as data ({@link DataEnvelope}).
+ *   <li>Passages and the question go into the prompt as data ({@link DataEnvelope}), the passages
+ *       numbered so the model cites them ({@link CitationGuard#numbered}).
  *   <li>The model streams. Every tool it asks for goes through the {@link ToolPolicy} first: a declared
  *       read-only tool runs, the message tool is only held as a draft ({@link ProposalGate}), anything
  *       else is denied with a message the model reads. The results go back to the model until it
  *       answers or the answer uses its calls.
- *   <li>The text is guarded while it streams ({@link ReactorGuard}): leaks, length, foreign links.
+ *   <li>The text is guarded while it streams ({@link ReactorGuard}): leaks, length, foreign links. At
+ *       the end, every sentence is checked against the source it cites: the passages and the tool
+ *       results, numbered in the order the model received them.
  *   <li>At the end, the draft is released only if the answer is not a refusal, and the answer is
  *       signed for the next request's history.
  * </ol>
@@ -98,22 +103,26 @@ public final class AnswerQuestion {
         ToolSession session = tools.session();
         List<String> called = new ArrayList<>();
         StringBuilder shown = new StringBuilder();
-        AtomicReference<String> replacement = new AtomicReference<>();
+        AtomicReference<GuardEvent.Replace> replacement = new AtomicReference<>();
+        // What the model received, in its numbering: the passages, then each tool result as it comes back.
+        List<String> sources = new CopyOnWriteArrayList<>(passages.stream().map(Passage::text).toList());
 
-        Flux<String> modelText = modelText(request, session, gate, called);
+        Flux<String> modelText = modelText(request, session, gate, called, sources);
 
-        return guard.guard(modelText).concatMap(event -> switch (event) {
+        return guard.guard(modelText, () -> List.copyOf(sources), request.question()).concatMap(event -> switch (event) {
             case GuardEvent.Delta d -> {
                 shown.append(d.text());
                 yield Flux.just(new ChatEvent.Delta(d.text()));
             }
             case GuardEvent.Replace r -> {
-                replacement.set(r.text());
+                replacement.set(r);
                 yield Flux.just(new ChatEvent.Replace(r.text(), r.reason().name()));
             }
             case GuardEvent.Done done -> {
-                String answer = replacement.get() != null ? replacement.get() : shown.toString();
-                boolean refused = replacement.get() != null || answer.contains(policy.refusal());
+                GuardEvent.Replace r = replacement.get();
+                String answer = r != null ? r.text() : shown.toString();
+                // A corrected answer still answers; every other replacement means the visitor got no answer.
+                boolean refused = (r != null && r.reason() != GuardEvent.Reason.CITATIONS) || answer.contains(policy.refusal());
                 Optional<MessageDraft> draft = gate.release(refused);
                 ChatEvent.Done end = new ChatEvent.Done(answer, signer.sign(SCOPE, answer), List.copyOf(called), passages);
                 yield draft.isPresent() ? Flux.just(new ChatEvent.Draft(draft.get()), end) : Flux.just(end);
@@ -126,7 +135,8 @@ public final class AnswerQuestion {
      * pass with calls uses the session's budget, and once it is spent the next request forbids tools and
      * any call the model still makes is ignored.
      */
-    private Flux<String> modelText(ModelRequest request, ToolSession session, ProposalGate<MessageDraft> gate, List<String> called) {
+    private Flux<String> modelText(ModelRequest request, ToolSession session, ProposalGate<MessageDraft> gate, List<String> called,
+            List<String> sources) {
         List<ToolResult> results = new ArrayList<>();
         Flux<String> pass = model.stream(request).handle((chunk, sink) -> {
             switch (chunk) {
@@ -134,14 +144,16 @@ public final class AnswerQuestion {
                 case ModelChunk.ToolUse use -> {
                     called.add(use.call().name());
                     if (request.toolsAllowed()) {
-                        results.add(new ToolResult(use.call(), decide(session, gate, use.call())));
+                        String content = decide(session, gate, use.call());
+                        sources.add(content);
+                        results.add(new ToolResult(use.call(), content, sources.size()));
                     }
                 }
             }
         });
         return pass.concatWith(Flux.defer(() -> results.isEmpty()
                 ? Flux.empty()
-                : modelText(request.withResults(results, session.nextChoice() == ToolChoice.AUTO), session, gate, called)));
+                : modelText(request.withResults(results, session.nextChoice() == ToolChoice.AUTO), session, gate, called, sources)));
     }
 
     /** The policy decides; only a declared read-only tool runs here. */
@@ -159,16 +171,13 @@ public final class AnswerQuestion {
     }
 
     private String userPrompt(List<Passage> passages, List<Turn> history, String question) {
-        StringBuilder context = new StringBuilder();
-        for (Passage p : passages) {
-            context.append(p.text()).append('\n');
-        }
+        String context = CitationGuard.numbered(passages.stream().map(Passage::text).toList());
         StringBuilder earlier = new StringBuilder();
         for (Turn t : history) {
             earlier.append(t.role() == Turn.Role.USER ? "Visitor: " : "Ava: ").append(t.content()).append('\n');
         }
         return envelope.wrap("history", earlier.toString(), 4000) + "\n"
-                + envelope.wrap("context", Map.of(), context.toString(), 4000) + "\n"
+                + envelope.wrap("context", Map.of(), context, 4000) + "\n"
                 + envelope.wrap("question", question, policy.maxQuestionChars());
     }
 }

@@ -43,7 +43,7 @@ class ChatControllerTest {
                 .returnResult()
                 .getResponseBody();
         assertNotNull(response);
-        assertEquals("We're at 12 Sample Street. More at https://example.com/visit.", response.answer());
+        assertEquals("We're at 12 Sample Street [1]. More at https://example.com/visit.", response.answer());
         assertNotNull(response.sig());
         assertTrue(response.context().stream().anyMatch(c -> c.contains("12 Sample Street")));
     }
@@ -94,7 +94,7 @@ class ChatControllerTest {
         assertEquals(List.of("check_stock", "propose_message"), policy.toolNames());
         assertTrue(policy.requiresConfirmation("propose_message"));
 
-        assertEquals("Dune: In stock: 3 copies.", complete("Is \"Dune\" in stock?").answer());
+        assertEquals("Dune: In stock: 3 copies [2].", complete("Is \"Dune\" in stock?").answer());
         assertEquals("I couldn't check that title. Ask with the book's name, like \"Dune\".", complete("Is \"../../etc/passwd\" in stock?").answer());
         ChatResponse cancel = complete("Cancel my order 1042.");
         assertEquals(List.of(new ChatResponse.ToolCall("cancel_order")), cancel.toolCalls());
