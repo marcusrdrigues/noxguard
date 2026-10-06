@@ -1,6 +1,6 @@
 # noxguard
 
-**Guardrails determinísticos para chats e agentes com LLM, em Java.** Uma guarda de saída para streaming que nunca deixa sair um vazamento e nunca segura a resposta inteira, lista de links permitidos, delimitação de dados, histórico assinado, política de ferramentas para agentes (tudo negado por padrão), portão de proposta, conferência de citações em respostas com RAG e, para o seu classificador de entrada, versões decodificadas da mensagem, tempo limite e uma decisão explícita para quando ele cai. Nenhuma dependência no núcleo, e um starter de Spring Boot que monta tudo a partir de propriedades.
+**Guardrails determinísticos para chats e agentes com LLM, em Java.** Uma guarda de saída para streaming que nunca deixa sair um vazamento e nunca segura a resposta inteira, lista de links permitidos, delimitação de dados, histórico assinado, política de ferramentas para agentes (tudo negado por padrão, com adaptador para o Spring AI), portão de proposta, conferência de citações em respostas com RAG e, para o seu classificador de entrada, versões decodificadas da mensagem, tempo limite e uma decisão explícita para quando ele cai. Nenhuma dependência no núcleo, e um starter de Spring Boot que monta tudo a partir de propriedades.
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.marcusrdrigues/noxguard-core)](https://central.sonatype.com/artifact/com.marcusrdrigues/noxguard-core)
 
@@ -31,11 +31,12 @@ Essas guardas vêm do Nox, o chat público do portfólio do autor, medidas com o
 | `HistorySigner` | `history` | Histórico forjado devolvido pelo cliente |
 | `ToolPolicy` | `agent` | Chamada de ferramenta que o agente não recebeu, argumento ruim, chamadas demais, ou efeito colateral sem confirmação do usuário |
 | `ProposalGate`, `ToolBudget`, `StrictSchema` | `agent` | Agente agindo além do pedido, ou em loop sem fim |
+| `GuardedToolCallbacks` | `springai` (módulo `noxguard-spring-ai`) | Ferramenta do Spring AI rodando sem a política decidir antes |
 | `CitationGuard` | `grounding` | Número, sigla ou nome numa resposta com RAG que nenhuma fonte tem, ou citação apontando para a fonte errada |
 | `InputViews` | `input` | Ataque escondido em base64, ROT13, leetspeak ou caracteres invisíveis, para o seu classificador ver |
 | `GuardedClassifier` | `input` | Classificador de entrada que trava ou falha, e uma aplicação que nunca decidiu o que acontece nessa hora |
 
-O `noxguard-reactor` transforma um `Flux<String>` do Spring AI, do WebFlux ou de qualquer fonte Reactor em eventos guardados, com a conferência de citações no fim quando você pede. O `noxguard-spring-boot-starter` cria as guardas, a política de ferramentas, o `CitationGuard` e o `GuardedClassifier` a partir das propriedades `noxguard.*`, e impede a aplicação de subir com configuração insegura (segredo curto, regex inválida, classificador sem `noxguard.input.on-failure`).
+O `noxguard-spring-ai` coloca cada `ToolCallback` do Spring AI sob o `ToolPolicy`: cada resposta ganha a sua sessão, ferramenta sem regra impede a aplicação de subir e ferramenta com `confirm()` exige escolher `ConfirmMode.DENY` ou `HOLD`. O `noxguard-reactor` transforma um `Flux<String>` do Spring AI, do WebFlux ou de qualquer fonte Reactor em eventos guardados, com a conferência de citações no fim quando você pede. O `noxguard-spring-boot-starter` cria as guardas, a política de ferramentas, o `CitationGuard` e o `GuardedClassifier` a partir das propriedades `noxguard.*`, e impede a aplicação de subir com configuração insegura (segredo curto, regex inválida, classificador sem `noxguard.input.on-failure`).
 
 ## Instalação e uso
 
@@ -51,6 +52,7 @@ Java 21 ou superior, no Maven Central como `com.marcusrdrigues:noxguard-core:0.3
 - Citação só dá para conferir quando a frase termina; num stream, o usuário pode ver uma frase que depois sai. Mostre como texto puro até o fim, como com os links.
 - As regras de número por extenso e de frase que depende da anterior ("Ele", "Isso") cobrem português e inglês.
 - Uma guarda não prova nada sobre o modelo: o `ProposalGate` torna o erro do modelo inofensivo, e quantas vezes o modelo erra se mede com o noxeval.
+- Ferramenta do Spring AI marcada com `returnDirect` manda o resultado direto ao usuário, e uma negação também ("Error: ..."). Nada roda, mas o texto é a mensagem de erro para o modelo; prefira ferramentas sem `returnDirect` sob a política.
 - O `ToolPolicy` decide sobre a chamada que o modelo pediu; ele não torna a ferramenta segura. Uma ferramenta que apaga dados precisa de autorização própria no sistema que ela toca.
 - Regra de argumento confere formato, não intenção: um slug no padrão não quer dizer que esse usuário pode ver aquele caso. Autorizar o dado é papel da aplicação.
 

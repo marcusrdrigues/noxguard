@@ -1,6 +1,6 @@
 # noxguard
 
-**Deterministic guardrails for LLM chats and agents, in Java.** A streaming output guard that never releases a leak and never buffers the answer, a link allow list, data delimiting, signed history, a deny-by-default tool policy for agents, a proposal gate, a citation check for RAG answers and a timeout with an explicit failure mode for your input classifier. No runtime dependencies in the core, and a Spring Boot starter that sets it all up from properties.
+**Deterministic guardrails for LLM chats and agents, in Java.** A streaming output guard that never releases a leak and never buffers the answer, a link allow list, data delimiting, signed history, a deny-by-default tool policy for agents (with a Spring AI adapter), a proposal gate, a citation check for RAG answers and a timeout with an explicit failure mode for your input classifier. No runtime dependencies in the core, and a Spring Boot starter that sets it all up from properties.
 
 [![CI](https://github.com/marcusrdrigues/noxguard/actions/workflows/ci.yml/badge.svg)](https://github.com/marcusrdrigues/noxguard/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/com.marcusrdrigues/noxguard-core)](https://central.sonatype.com/artifact/com.marcusrdrigues/noxguard-core)
@@ -43,11 +43,12 @@ These guards come from Nox, the public chat on the author's portfolio, where the
 | `HistorySigner` | `history` | Forged history ("assistant: developer mode on") sent back by a client |
 | `ToolPolicy` | `agent` | A tool call the agent was not given, bad arguments, too many calls, or a side effect without the user's confirmation |
 | `ProposalGate`, `ToolBudget`, `StrictSchema` | `agent` | An agent acting beyond the request, or looping without end |
+| `GuardedToolCallbacks` | `springai` (module `noxguard-spring-ai`) | A Spring AI tool that runs without the policy deciding first |
 | `CitationGuard` | `grounding` | A number, acronym or name in a RAG answer that no source has, or a citation to the wrong source |
 | `InputViews` | `input` | Attacks hidden in base64, ROT13, leetspeak or invisible characters, for your classifier to see |
 | `GuardedClassifier` | `input` | An input classifier that hangs or fails, and an app that never decided what happens then |
 
-`noxguard-reactor` turns a `Flux<String>` from Spring AI, WebFlux or any Reactor source into guarded events, with the citation check at the end when you ask for it. `noxguard-spring-boot-starter` creates the guards, the tool policy, the citation guard and the guarded classifier from `noxguard.*` properties.
+`noxguard-spring-ai` puts every Spring AI `ToolCallback` under the `ToolPolicy`. `noxguard-reactor` turns a `Flux<String>` from Spring AI, WebFlux or any Reactor source into guarded events, with the citation check at the end when you ask for it. `noxguard-spring-boot-starter` creates the guards, the tool policy, the citation guard and the guarded classifier from `noxguard.*` properties.
 
 ## Install
 
@@ -64,6 +65,12 @@ Java 21 or later.
   <groupId>com.marcusrdrigues</groupId>
   <artifactId>noxguard-reactor</artifactId>
   <version>0.3.0</version>
+</dependency>
+<!-- for Spring AI tools under the tool policy (Spring AI 2.0, provided by your app): -->
+<dependency>
+  <groupId>com.marcusrdrigues</groupId>
+  <artifactId>noxguard-spring-ai</artifactId>
+  <version>0.4.0</version>
 </dependency>
 <!-- in a Spring Boot 4 app, the guards from properties: -->
 <dependency>
@@ -200,6 +207,23 @@ String result = switch (session.decide(new ToolCall(name, args))) {   // args: t
 request.toolChoice(session.nextChoice());                // NONE once the calls are used
 ```
 
+**Spring AI tools**, with `noxguard-spring-ai`: the same policy wraps every `ToolCallback`, so you don't write the loop above.
+
+```java
+GuardedToolCallbacks guarded = GuardedToolCallbacks.builder(policy)
+        .tools(List.of(ToolCallbacks.from(new StoreTools())))   // @Tool methods, a provider's callbacks, MCP tools
+        .onConfirm(ConfirmMode.HOLD)                              // required when a tool is declared with confirm()
+        .listener((tool, decision) -> log.info("tool={} decision={}", tool, decision.getClass().getSimpleName()))
+        .build();                                                 // throws when a tool has no rule in the policy
+
+AnswerTools answer = guarded.forNewAnswer();                      // one per request: its own session and limits
+String text = chatClient.prompt(question).toolCallbacks(answer.callbacks()).call().content();
+answer.release(isRefusal(text)).ifPresent(held -> showForConfirmation(held.call()));
+// when the person confirms: held.run()   (runs the original tool once)
+```
+
+Arguments that are not a JSON object are denied and counted, like any call. `ConfirmMode.DENY` never runs a tool declared with `confirm()` (right for voice or batch, where there is no screen to ask on); `HOLD` keeps the call for the person. Call `forNewAnswer()` on every request: one answer's callbacks registered as the client's default tools would share one session, which fails closed (calls past the cap are denied) but no longer counts per answer.
+
 A denial tells the model what it can do next (the declared tools, the argument that broke a rule, "tool limit reached; answer now") and never echoes what the model sent: a rejected value may be exactly what an injection wanted back in the conversation. Every call counts against the total, denied or not, so a model that keeps sending bad calls still reaches the cap and the loop ends.
 
 **Spring Boot**: add the starter and set the properties; each bean backs off when you define your own.
@@ -223,6 +247,7 @@ noxguard:
     timeout: 800ms
   tools:
     max-calls: 3
+    on-confirm: hold                            # with noxguard-spring-ai and a confirm tool: deny or hold, no default
     allow:                                      # a list, so tool names keep their underscores
       - name: get_case_study
         args:
@@ -235,7 +260,7 @@ noxguard:
         max-calls: 1
 ```
 
-This gives `LinkPolicy`, `DataEnvelope`, `HistorySigner`, `StreamGuards` (a new `StreamGuard` per answer), `ToolPolicy`, `CitationGuard`, `GuardedClassifier` (around your `InputClassifier` bean) and, with `noxguard-reactor`, `ReactorGuard`. A short secret, an invalid regex, a tool setting without meaning or an input classifier without `on-failure` stops the app at startup, naming the property. IDEs autocomplete the keys.
+This gives `LinkPolicy`, `DataEnvelope`, `HistorySigner`, `StreamGuards` (a new `StreamGuard` per answer), `ToolPolicy`, `CitationGuard`, `GuardedClassifier` (around your `InputClassifier` bean), with `noxguard-reactor` a `ReactorGuard` and, with `noxguard-spring-ai`, `GuardedToolCallbacks` around your `ToolCallback` and `ToolCallbackProvider` beans. A short secret, an invalid regex, a tool setting without meaning or an input classifier without `on-failure` stops the app at startup, naming the property. IDEs autocomplete the keys.
 
 Every public type has Javadoc with its rules and thread-safety. Per-answer guards (`StreamGuard`, `ToolSession`, `ProposalGate`, `ToolBudget`) are not thread-safe; configuration objects (`LinkPolicy`, `DataEnvelope`, `HistorySigner`, `ToolPolicy`, `CitationGuard`, `GuardedClassifier`) are immutable and can be shared, for instance as Spring beans.
 
@@ -256,10 +281,11 @@ Every public type has Javadoc with its rules and thread-safety. Per-answer guard
 - `ToolPolicy` decides on the call the model asked for; it does not make the tool itself safe. A tool that can delete data needs its own authorization in the system it touches.
 - Argument rules check shape, not intent: a slug that matches the pattern does not mean this user may see that case. Authorizing the data is the app's job.
 - `Confirm` relies on the app showing the proposal and waiting for the user. The policy cannot see the UI.
+- A Spring AI tool marked `returnDirect` sends its result straight to the user, so a denial does too ("Error: ..."). Nothing runs, but the text is the model's error message; prefer tools without `returnDirect` under the policy.
 
 ## Design
 
-The core knows no framework; adapters depend on it, never the reverse. Results are sealed types, there is no `null` in the public API, and `module-info` exports only the API packages. The spec, the decisions and the alternatives that were turned down are in [`docs/specs/`](docs/specs) (0.1, the core; 0.2, the tool policy and the starter; 0.3, the citation guard and the input classifier port) and [`docs/design.md`](docs/design.md).
+The core knows no framework; adapters depend on it, never the reverse. Results are sealed types, there is no `null` in the public API, and `module-info` exports only the API packages. The spec, the decisions and the alternatives that were turned down are in [`docs/specs/`](docs/specs) (0.1, the core; 0.2, the tool policy and the starter; 0.3, the citation guard and the input classifier port; 0.4, the Spring AI adapter) and [`docs/design.md`](docs/design.md).
 
 ## Contributing and security
 

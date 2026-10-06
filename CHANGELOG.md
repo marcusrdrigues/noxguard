@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - unreleased
+
+### Added
+
+- `noxguard-spring-ai`: Spring AI tools under a `ToolPolicy`. `GuardedToolCallbacks` wraps every `ToolCallback`; `forNewAnswer()` gives each request an `AnswerTools` whose callbacks share one session. A tool without a rule in the policy, or a tool that needs confirmation without a `ConfirmMode`, stops `build()`. `ConfirmMode.DENY` never runs such a tool; `HOLD` keeps the call until the answer ends and gives it as a `HeldCall` to run once, after the person confirms, only when the answer is not a refusal. A `ToolDecisionListener` hears every decision. Spring AI is a `provided` dependency, compiled against 2.0.1. It comes from the `GuardedToolCallback` of [dio-spring-boot-learning-track](https://github.com/marcusrdrigues/dio-spring-boot-learning-track/tree/main/05-spring-ai).
+- `ToolSession.invalidArguments(tool)`: denies a call whose arguments are not a JSON object, counted against the answer's total and never against the tool's own cap.
+- Starter: with `noxguard-spring-ai`, a `ToolPolicy` and the app's `ToolCallback` or `ToolCallbackProvider` beans, a `GuardedToolCallbacks` bean. `noxguard.tools.on-confirm` (`deny` or `hold`) is required when one of those tools is declared with `confirm: true`.
+
 ## [0.3.0] - 2026-10-06
 
 ### Added

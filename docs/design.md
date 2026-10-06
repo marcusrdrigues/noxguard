@@ -17,11 +17,13 @@ noxguard is the middle level. It assumes the first exists and the third is in pl
 ```
 noxguard-core      ← noxguard-reactor      ← examples/chat-spring-boot
 (no dependencies)    (+ reactor-core)         (+ Spring Boot, Spring AI)
-      ↑                    ↑ (optional)
-      └── noxguard-spring-boot-starter (+ spring-boot-autoconfigure)
+      ↑  ↖
+      │   noxguard-spring-ai  (+ spring-ai-model, provided)
+      │
+      └── noxguard-spring-boot-starter (+ spring-boot-autoconfigure; noxguard-reactor and noxguard-spring-ai optional)
 ```
 
-- The core knows no framework. A new integration (a LangChain4j guardrail, a Spring AI advisor) is a new module that depends on the core, with no change to it. The Spring Boot starter is the first one: it only reads properties and builds core objects, and imports the Spring Boot BOM in its own POM, so no Spring version reaches the core.
+- The core knows no framework. A new integration (a LangChain4j guardrail, a Spring AI adapter) is a new module that depends on the core, with no change to it. `noxguard-spring-ai` (0.4) is the second one: it decorates Spring AI's `ToolCallback` and declares Spring AI as `provided`, so the app's version wins and nothing about Spring AI reaches an app that does not use it. The Spring Boot starter is the first one: it only reads properties and builds core objects, and imports the Spring Boot BOM in its own POM, so no Spring version reaches the core.
 - `module-info` exports only the API packages; `internal` stays hidden from users.
 - **A library, not a service.** The stream guard runs on every piece of every answer, in microseconds. A network hop per piece would add latency and a new failure mode ("the guard service is down: let the text through or block it?"). A hosted component, if ever needed, becomes an adapter behind a port.
 
@@ -57,5 +59,6 @@ The citation guard (0.3) is checked the same way: `tools/parity/citations-fixtur
 - `StreamGuard` is tested across thousands of seeded random ways to split answers into pieces, with limits from 5 to 1,200 characters, because chunking is what streaming breaks. A mutation (a smaller holdback) makes the test fail at once.
 - `HistorySigner` is checked against a signature computed by Node.
 - `ToolPolicy` has Nox's agent cases (unknown tool, the fourth call, a bad slug, the message tool only proposing) and checks over a list of hostile values that no denial echoes them.
-- The starter is tested on plain Spring contexts: each bean, each condition (with and without `noxguard-reactor`, with an app bean that replaces ours) and each startup failure.
+- The starter is tested on plain Spring contexts: each bean, each condition (with and without `noxguard-reactor` and `noxguard-spring-ai`, with an app bean that replaces ours) and each startup failure.
+- `noxguard-spring-ai` is tested with fake `ToolCallback`s carrying the cases of the voice budgeting assistant it comes from: five expenses in one message (the fourth and fifth denied), a negative amount, an injected category, invalid JSON, a confirmation held and run once, and one answer's tools shared across answers (never more calls than the cap).
 - The example app is evaluated end to end by noxeval in CI, with a scripted model that misbehaves on purpose.
