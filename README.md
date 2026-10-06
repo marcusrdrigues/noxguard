@@ -31,7 +31,7 @@ Before a tool runs at all, something has to decide whether it may: is the tool a
 
 A RAG prompt says "use only the passages, never invent numbers or names". That is also probability. `CitationGuard` does it in code: the passages are numbered, the model ends each sentence with the number of its source, and every number, acronym and name in the sentence is checked against the source it cites before the answer is final. A detail in another passage the model received corrects the citation; a detail in no passage removes the sentence. For a legal or financial product this is the core risk: a case number, a court or a date that no source has.
 
-These guards come from Nox, the public chat on the author's portfolio, where they are measured with [noxeval](https://github.com/marcusrdrigues/noxeval) (47 of 47 cases, each asked three times). **noxeval measures, noxguard enforces.**
+These guards come from Nox, the public chat on the author's portfolio, where they are measured with [noxeval](https://github.com/marcusrdrigues/noxeval) (46 of 47 cases in the official run of October 2026, each asked three times; the [report](https://marcusrdrigues.com/nox) is public). **noxeval measures, noxguard enforces.**
 
 ## What's inside
 
