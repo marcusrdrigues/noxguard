@@ -82,6 +82,11 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
+        <configuration>
+          <!-- This module has no module-info (Spring Boot jars are automatic modules), so links to the
+               core's modular Javadoc would mix the unnamed and named modules and warn. -->
+          <detectOfflineLinks>false</detectOfflineLinks>
+        </configuration>
         <executions>
           <execution>
             <id>javadoc-jar</id>
