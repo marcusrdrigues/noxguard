@@ -39,7 +39,7 @@ O `noxguard-reactor` transforma um `Flux<String>` do Spring AI, do WebFlux ou de
 
 ## Instalação e uso
 
-Java 21 ou superior, no Maven Central como `com.marcusrdrigues:noxguard-core:0.2.0` (e `noxguard-reactor` para `Flux`, `noxguard-spring-boot-starter` para Spring Boot 4). As coordenadas Maven, os exemplos de código e os limites estão no [README em inglês](README.md#install), que é a referência. O app de exemplo com Spring Boot está em [`examples/chat-spring-boot`](examples/chat-spring-boot).
+Java 21 ou superior, no Maven Central como `com.marcusrdrigues:noxguard-core:0.3.0` (e `noxguard-reactor` para `Flux`, `noxguard-spring-boot-starter` para Spring Boot 4). As coordenadas Maven, os exemplos de código e os limites estão no [README em inglês](README.md#install), que é a referência. O app de exemplo com Spring Boot está em [`examples/chat-spring-boot`](examples/chat-spring-boot).
 
 ## Limites, sem rodeio
 

@@ -57,23 +57,23 @@ Java 21 or later.
 <dependency>
   <groupId>com.marcusrdrigues</groupId>
   <artifactId>noxguard-core</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 <!-- for a Flux<String> model stream (Spring AI, WebFlux): -->
 <dependency>
   <groupId>com.marcusrdrigues</groupId>
   <artifactId>noxguard-reactor</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 <!-- in a Spring Boot 4 app, the guards from properties: -->
 <dependency>
   <groupId>com.marcusrdrigues</groupId>
   <artifactId>noxguard-spring-boot-starter</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
-Gradle: `implementation("com.marcusrdrigues:noxguard-core:0.2.0")`. From source: `git clone https://github.com/marcusrdrigues/noxguard && cd noxguard && mvn install`.
+Gradle: `implementation("com.marcusrdrigues:noxguard-core:0.3.0")`. From source: `git clone https://github.com/marcusrdrigues/noxguard && cd noxguard && mvn install`.
 
 ## Quick start
 
