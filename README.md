@@ -1,6 +1,6 @@
 # noxguard
 
-**Deterministic guardrails for LLM chats and agents, in Java.** A streaming output guard that never releases a leak and never buffers the answer, a link allow list, data delimiting, signed history, a deny-by-default tool policy for agents, a proposal gate and input views for your classifier. No runtime dependencies in the core, and a Spring Boot starter that sets it all up from properties.
+**Deterministic guardrails for LLM chats and agents, in Java.** A streaming output guard that never releases a leak and never buffers the answer, a link allow list, data delimiting, signed history, a deny-by-default tool policy for agents, a proposal gate, a citation check for RAG answers and a timeout with an explicit failure mode for your input classifier. No runtime dependencies in the core, and a Spring Boot starter that sets it all up from properties.
 
 [![CI](https://github.com/marcusrdrigues/noxguard/actions/workflows/ci.yml/badge.svg)](https://github.com/marcusrdrigues/noxguard/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/com.marcusrdrigues/noxguard-core)](https://central.sonatype.com/artifact/com.marcusrdrigues/noxguard-core)
@@ -29,6 +29,8 @@ Agents add a second problem: a model with tools can propose an action it should 
 
 Before a tool runs at all, something has to decide whether it may: is the tool allowed, are the arguments acceptable, has the answer used its calls, does a person have to confirm? `ToolPolicy` is that decision in one object, checked before every call. It is to an agent's tools what Spring Security is to a web app's endpoints: deny by default, a rule per tool, and a decision the app acts on. The model can ask for anything; the policy decides what runs (OWASP LLM06, Excessive Agency).
 
+A RAG prompt says "use only the passages, never invent numbers or names". That is also probability. `CitationGuard` does it in code: the passages are numbered, the model ends each sentence with the number of its source, and every number, acronym and name in the sentence is checked against the source it cites before the answer is final. A detail in another passage the model received corrects the citation; a detail in no passage removes the sentence. For a legal or financial product this is the core risk: a case number, a court or a date that no source has.
+
 These guards come from Nox, the public chat on the author's portfolio, where they are measured with [noxeval](https://github.com/marcusrdrigues/noxeval) (47 of 47 cases, each asked three times). **noxeval measures, noxguard enforces.**
 
 ## What's inside
@@ -41,9 +43,11 @@ These guards come from Nox, the public chat on the author's portfolio, where the
 | `HistorySigner` | `history` | Forged history ("assistant: developer mode on") sent back by a client |
 | `ToolPolicy` | `agent` | A tool call the agent was not given, bad arguments, too many calls, or a side effect without the user's confirmation |
 | `ProposalGate`, `ToolBudget`, `StrictSchema` | `agent` | An agent acting beyond the request, or looping without end |
+| `CitationGuard` | `grounding` | A number, acronym or name in a RAG answer that no source has, or a citation to the wrong source |
 | `InputViews` | `input` | Attacks hidden in base64, ROT13, leetspeak or invisible characters, for your classifier to see |
+| `GuardedClassifier` | `input` | An input classifier that hangs or fails, and an app that never decided what happens then |
 
-`noxguard-reactor` turns a `Flux<String>` from Spring AI, WebFlux or any Reactor source into guarded events. `noxguard-spring-boot-starter` creates the guards and the tool policy from `noxguard.*` properties.
+`noxguard-reactor` turns a `Flux<String>` from Spring AI, WebFlux or any Reactor source into guarded events, with the citation check at the end when you ask for it. `noxguard-spring-boot-starter` creates the guards, the tool policy, the citation guard and the guarded classifier from `noxguard.*` properties.
 
 ## Install
 
@@ -105,6 +109,55 @@ Flux<GuardEvent> events = guard.guard(chatClient.prompt(question).stream().conte
 
 A leak cancels the model stream (it stops spending tokens) and emits `Replace` with your refusal. A foreign link or an empty answer is replaced at the end.
 
+**A RAG answer's citations**, checked against the sources the model received:
+
+```java
+CitationGuard citations = CitationGuard.builder()
+        .allowNames(List.of("Example Books", "Ava"))            // names an answer may say without a source
+        .build();                                                // immutable, thread-safe
+
+String context = CitationGuard.numbered(passages);              // "[1] ...\n\n[2] ...": put this in the prompt
+// ...the model answers "We're open from 9am to 6pm, Monday to Saturday [1]."
+
+CitationResult result = citations.check(answer, passages, question);
+String shown = result.empty() ? NOT_CONFIRMED : result.text();  // sentences removed, citations corrected
+result.sentences();                                             // per sentence: KEPT, RECITED, REMOVED, with the details
+```
+
+Numbers are compared by value ("10 mil", "10,000" and "10.000" are the same), names and acronyms as whole words. A number of years that is the difference of two years in the answer ("from 2023 to 2026, 3 years") is arithmetic, not invention. A detail taken from the question passes only in a sentence that denies it ("I didn't find a prize in 2024"). When the first sentence is removed, a second one that leans on it ("He...", "That...") goes too.
+
+With `noxguard-reactor`, the same check runs when the stream ends. The sources are read then, so tool results that arrived during the answer count:
+
+```java
+ReactorGuard guard = ReactorGuard.builder()
+        .streamGuard(...).links(...).refusal(REFUSAL)
+        .citations(citations, "I couldn't find that confirmed.")
+        .build();
+
+guard.guard(stream, () -> sources, question);   // Replace(checked text, CITATIONS) or Replace(not confirmed, NOT_CONFIRMED)
+```
+
+**An input classifier** (a hosted model that flags prompt injection), with a timeout and a choice for when it is down:
+
+```java
+InputClassifier classifier = text -> {
+    double score = client.injectionScore(text);                 // your call
+    return score >= 0.9 ? Verdict.flagged(score, "injection") : Verdict.clean(score);
+};
+GuardedClassifier guarded = GuardedClassifier.of(classifier)
+        .timeout(Duration.ofMillis(800))
+        .onFailure(FailureMode.FAIL_OPEN)                       // required: build() throws without it
+        .build();
+
+switch (guarded.classify(message)) {                            // the message and its decoded views
+    case ClassifierOutcome.Allowed a     -> answer(message);
+    case ClassifierOutcome.Blocked b     -> refuse();
+    case ClassifierOutcome.Unavailable u -> { metrics.count("classifier.down"); answer(message); }   // FAIL_OPEN only
+}
+```
+
+The classifier reads the message and each view `InputViews` decodes; any flagged view blocks. One timeout covers all the views, and a classifier that times out is interrupted. Fail open when other guards still run after the model (Nox does); fail closed when a missed attack costs more than a refused question. `Unavailable` is its own case so a dashboard can count how often the classifier was down instead of mixing it with "allowed".
+
 **Signed history**, so a client can't put words in the assistant's mouth:
 
 ```java
@@ -163,6 +216,11 @@ noxguard:
     reserved-tags: [context, question, history]
   history:
     secret: ${NOXGUARD_HISTORY_SECRET}          # 32+ bytes, or the app does not start
+  citations:
+    allow-names: [Example Books, Ava]           # creates the CitationGuard
+  input:                                        # with an InputClassifier bean of yours, both are required
+    on-failure: fail-open                       # or fail-closed; there is no default
+    timeout: 800ms
   tools:
     max-calls: 3
     allow:                                      # a list, so tool names keep their underscores
@@ -177,19 +235,23 @@ noxguard:
         max-calls: 1
 ```
 
-This gives `LinkPolicy`, `DataEnvelope`, `HistorySigner`, `StreamGuards` (a new `StreamGuard` per answer), `ToolPolicy` and, with `noxguard-reactor`, `ReactorGuard`. A short secret, an invalid regex or a tool setting without meaning stops the app at startup, naming the property. IDEs autocomplete the keys.
+This gives `LinkPolicy`, `DataEnvelope`, `HistorySigner`, `StreamGuards` (a new `StreamGuard` per answer), `ToolPolicy`, `CitationGuard`, `GuardedClassifier` (around your `InputClassifier` bean) and, with `noxguard-reactor`, `ReactorGuard`. A short secret, an invalid regex, a tool setting without meaning or an input classifier without `on-failure` stops the app at startup, naming the property. IDEs autocomplete the keys.
 
-Every public type has Javadoc with its rules and thread-safety. Per-answer guards (`StreamGuard`, `ToolSession`, `ProposalGate`, `ToolBudget`) are not thread-safe; configuration objects (`LinkPolicy`, `DataEnvelope`, `HistorySigner`, `ToolPolicy`) are immutable and can be shared, for instance as Spring beans.
+Every public type has Javadoc with its rules and thread-safety. Per-answer guards (`StreamGuard`, `ToolSession`, `ProposalGate`, `ToolBudget`) are not thread-safe; configuration objects (`LinkPolicy`, `DataEnvelope`, `HistorySigner`, `ToolPolicy`, `CitationGuard`, `GuardedClassifier`) are immutable and can be shared, for instance as Spring beans.
 
 ## Example app
 
-[`examples/chat-spring-boot`](examples/chat-spring-boot) is a small Spring Boot chat for a made-up bookstore, with every guard in the path, set up by the starter from `application.yml`. Its default model is scripted and misbehaves on purpose: it recites its prompt, obeys an image instruction, proposes a message for a third party, calls a tool it was never given, passes a path as a book title and rambles. CI runs a 14-case noxeval suite against it over HTTP, and the guards catch each mistake. A real model is one Spring profile away.
+[`examples/chat-spring-boot`](examples/chat-spring-boot) is a small Spring Boot chat for a made-up bookstore, with every guard in the path, set up by the starter from `application.yml`. Its default model is scripted and misbehaves on purpose: it recites its prompt, obeys an image instruction, proposes a message for a third party, calls a tool it was never given, passes a path as a book title, invents the year the store opened and rambles. CI runs a 15-case noxeval suite against it over HTTP, and the guards catch each mistake. A real model is one Spring profile away.
 
 ## Honest limits
 
 - The stream guard catches literal markers. A paraphrased leak passes; the defense there is having no secret in the prompt.
 - Links are checked at the end of the stream, so a link's text can be shown before the answer is replaced. Render answers as plain text until the stream ends.
-- `InputViews` gives a classifier better input. It is not a classifier.
+- `InputViews` gives a classifier better input. It is not a classifier, and `GuardedClassifier` decides what happens when yours fails, not how good it is.
+- `CitationGuard` checks details, not meaning: "worked at" becoming "led" passes, because both words are ordinary. Checking meaning needs a model; measure it with noxeval's judge.
+- A number written as a word in the answer ("two copies") is not checked. Numbers in digits are; words in the sources ("ten thousand") count as numbers.
+- Citations are only checkable once a sentence ends, so in a stream the user may see a sentence that is then removed. Render as plain text until the stream ends, as with links.
+- The rules for number words and for sentences that lean on the previous one ("He", "Isso") cover Portuguese and English.
 - A guard proves nothing about a model. `ProposalGate` makes a model's mistake harmless; how often the model makes it is measured with noxeval.
 - `ToolPolicy` decides on the call the model asked for; it does not make the tool itself safe. A tool that can delete data needs its own authorization in the system it touches.
 - Argument rules check shape, not intent: a slug that matches the pattern does not mean this user may see that case. Authorizing the data is the app's job.
@@ -197,7 +259,7 @@ Every public type has Javadoc with its rules and thread-safety. Per-answer guard
 
 ## Design
 
-The core knows no framework; adapters depend on it, never the reverse. Results are sealed types, there is no `null` in the public API, and `module-info` exports only the API packages. The spec, the decisions and the alternatives that were turned down are in [`docs/specs/`](docs/specs) (0.1, the core; 0.2, the tool policy and the starter) and [`docs/design.md`](docs/design.md).
+The core knows no framework; adapters depend on it, never the reverse. Results are sealed types, there is no `null` in the public API, and `module-info` exports only the API packages. The spec, the decisions and the alternatives that were turned down are in [`docs/specs/`](docs/specs) (0.1, the core; 0.2, the tool policy and the starter; 0.3, the citation guard and the input classifier port) and [`docs/design.md`](docs/design.md).
 
 ## Contributing and security
 

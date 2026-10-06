@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - unreleased
+
+### Added
+
+- `CitationGuard` (in `noxguard-core`, package `grounding`): checks a RAG answer's `[n]` citations against the sources the model received. A number, acronym or name in another received source corrects the citation (`RECITED`); one in no source removes the sentence (`REMOVED`), and a following sentence that leans on it goes too (`REMOVED_WITH_PREVIOUS`). `CitationResult.empty()` tells the app to show its "not confirmed" text. `CitationGuard.numbered(sources)` builds the numbered context for the prompt. `GroundingDetails` exposes the detail extractor on its own. Both are ports of Nox's checker, verified against the TypeScript original on 1,500 generated cases from the site's content.
+- `GuardedClassifier` (package `input`): wraps an `InputClassifier` with a timeout and a required `FailureMode` (`FAIL_OPEN` or `FAIL_CLOSED`, no default). It classifies the message and its `InputViews`; any flagged view blocks. The outcome is a sealed `ClassifierOutcome`: `Allowed`, `Blocked` or `Unavailable` (the classifier failed and the app fails open).
+- `ReactorGuard.Builder.citations(guard, notConfirmed)` and `ReactorGuard.guard(stream, sources, question)`: the citation check when the stream ends. The sources are a `Supplier`, read then, so tool results that arrived during the answer count. `GuardEvent.Reason` gains `CITATIONS` and `NOT_CONFIRMED`.
+- Starter: `noxguard.citations.allow-names` creates a `CitationGuard`; an `InputClassifier` bean of the app's gets a `GuardedClassifier` from `noxguard.input.on-failure` and `noxguard.input.timeout`, and the app does not start without them.
+- `InputViews.withDefaults()`.
+
+### Changed
+
+- A `switch` over `GuardEvent.Reason` without a `default` needs the two new cases.
+- `examples/chat-spring-boot` numbers its passages and tool results, its scripted model cites them, and the citation check runs on every answer. The model now also invents the year the store opened; the guard removes it. The noxeval suite has 15 cases.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

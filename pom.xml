@@ -6,7 +6,7 @@
 
   <groupId>com.marcusrdrigues</groupId>
   <artifactId>noxguard-parent</artifactId>
-  <version>0.2.0-SNAPSHOT</version>
+  <version>0.3.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>noxguard</name>

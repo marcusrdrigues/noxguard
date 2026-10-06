@@ -27,11 +27,12 @@ noxguard-core      ← noxguard-reactor      ← examples/chat-spring-boot
 
 ## Code conventions
 
-- Results are sealed types (`StreamStatus`, `GuardEvent`): a `switch` over them is checked for every case, and impossible states can't be represented.
+- Results are sealed types (`StreamStatus`, `GuardEvent`, `ToolDecision`, `ClassifierOutcome`): a `switch` over them is checked for every case, and impossible states can't be represented.
 - Data are records; there is no `null` in the public API (`Optional` where a value may be missing).
 - Configuration goes through builders that validate on `build()`, so a bad setup fails at startup, with a clear message, not during an answer.
 - Per-answer guards (`StreamGuard`, `ToolSession`, `ProposalGate`, `ToolBudget`) hold state and are not thread-safe; configuration objects are immutable and shared. Each Javadoc says which.
 - **Deny by default.** What is not declared is refused: a tool not in the `ToolPolicy`, an argument not declared for that tool, a link not in the `LinkPolicy`. A setting that would make a guard unsafe (a history secret under 32 bytes, an agent with no call cap) fails at startup instead of falling back to something permissive.
+- **No default where the choice is the app's.** What happens when an input classifier is down depends on what else guards the answer and what a missed attack costs, so `GuardedClassifier` has no default failure mode: `build()` throws, and the starter stops the app, until one is chosen.
 - Messages that go back to the model name only what the app declared, never what the model sent, so a denial cannot carry an injected value back into the conversation.
 
 ## Parity with Nox
@@ -47,9 +48,12 @@ The guards are ports of TypeScript code that runs in Nox. Nox's tests were porte
 | Surrogate pairs | Never split | Can be split | A half pair breaks the JSON of the client |
 | Link start | Not glued to a letter or digit | JavaScript `\b` | `_https://...` is still a link to a Markdown renderer |
 
+The citation guard (0.3) is checked the same way: `tools/parity/citations-fixture.mjs` runs Nox's `checkCitations` and `unsupportedDetails` over 1,500 answers made from the site's own prose (with mutated numbers, foreign names, wrong citations, dependent sentences and date arithmetic), and the Java test replays every case. There is no intended difference. Passages about clients are left out of the fixture, which is committed here.
+
 ## Testing
 
 - Every guard has its Nox cases plus adversarial ones.
+- `GuardedClassifier` is tested with classifiers that hang (the call is interrupted at the timeout), throw or return nothing, under both failure modes, and with an attack visible only in a decoded view.
 - `StreamGuard` is tested across thousands of seeded random ways to split answers into pieces, with limits from 5 to 1,200 characters, because chunking is what streaming breaks. A mutation (a smaller holdback) makes the test fail at once.
 - `HistorySigner` is checked against a signature computed by Node.
 - `ToolPolicy` has Nox's agent cases (unknown tool, the fourth call, a bad slug, the message tool only proposing) and checks over a list of hostile values that no denial echoes them.
