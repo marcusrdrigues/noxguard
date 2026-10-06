@@ -9,4 +9,5 @@ module com.marcusrdrigues.noxguard {
     exports com.marcusrdrigues.noxguard.history;
     exports com.marcusrdrigues.noxguard.agent;
     exports com.marcusrdrigues.noxguard.input;
+    exports com.marcusrdrigues.noxguard.grounding;
 }
