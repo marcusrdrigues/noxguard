@@ -21,6 +21,11 @@ import com.marcusrdrigues.noxguard.input.InputClassifier;
 import com.marcusrdrigues.noxguard.input.Verdict;
 import com.marcusrdrigues.noxguard.output.LinkPolicy;
 import com.marcusrdrigues.noxguard.reactor.ReactorGuard;
+import com.marcusrdrigues.noxguard.springai.AnswerTools;
+import com.marcusrdrigues.noxguard.springai.ConfirmMode;
+import com.marcusrdrigues.noxguard.springai.GuardedToolCallbacks;
+import com.marcusrdrigues.noxguard.springai.HeldCall;
+import com.marcusrdrigues.noxguard.springai.ToolDecisionListener;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -30,9 +35,14 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -80,7 +90,7 @@ class NoxguardAutoConfigurationTest {
         for (Class<?> config : appConfig) {
             context.register(config);
         }
-        context.register(NoxguardAutoConfiguration.class, NoxguardReactorAutoConfiguration.class);
+        context.register(NoxguardAutoConfiguration.class, NoxguardReactorAutoConfiguration.class, NoxguardSpringAiAutoConfiguration.class);
         context.refresh();
         return context;
     }
@@ -115,6 +125,7 @@ class NoxguardAutoConfigurationTest {
             assertFalse(has(context, StreamGuards.class));
             assertFalse(has(context, ToolPolicy.class));
             assertFalse(has(context, ReactorGuard.class));
+            assertFalse(has(context, GuardedToolCallbacks.class));
             assertFalse(has(context, CitationGuard.class));
             assertFalse(has(context, GuardedClassifier.class));
         }
@@ -266,6 +277,97 @@ class NoxguardAutoConfigurationTest {
         assertTrue(messages.toString().contains("noxguard.input.on-failure"), messages.toString());
     }
 
+    /** A Spring AI tool that answers with its name. */
+    private static ToolCallback tool(String name) {
+        return new ToolCallback() {
+            @Override
+            public ToolDefinition getToolDefinition() {
+                return ToolDefinition.builder().name(name).description(name).inputSchema("{}").build();
+            }
+
+            @Override
+            public String call(String toolInput) {
+                return "ran " + name;
+            }
+        };
+    }
+
+    /** An app with Spring AI tools: one as a bean, one from a provider, as @Tool classes give them. */
+    @Configuration(proxyBeanMethods = false)
+    static class AppTools {
+        static final List<String> HEARD = new CopyOnWriteArrayList<>();
+
+        @Bean
+        ToolCallback caseStudyTool() {
+            return tool("get_case_study");
+        }
+
+        @Bean
+        ToolCallbackProvider messageTools() {
+            return ToolCallbackProvider.from(tool("send_message"));
+        }
+
+        @Bean
+        ToolDecisionListener toolLog() {
+            return (tool, decision) -> HEARD.add(tool + ":" + decision.getClass().getSimpleName());
+        }
+    }
+
+    /** An app that exposes a tool the policy never declared. */
+    @Configuration(proxyBeanMethods = false)
+    static class UndeclaredTool {
+        @Bean
+        ToolCallback deleteOrders() {
+            return tool("delete_orders");
+        }
+    }
+
+    @Test
+    @DisplayName("Spring AI: the app's tool beans and providers come guarded by the policy, with the listener")
+    void guardedToolCallbacks() {
+        AppTools.HEARD.clear();
+        Map<String, Object> p = full();
+        p.put("noxguard.tools.on-confirm", "hold");
+        try (AnnotationConfigApplicationContext context = start(p, AppTools.class)) {
+            GuardedToolCallbacks guarded = context.getBean(GuardedToolCallbacks.class);
+            assertEquals(List.of("get_case_study", "send_message"), guarded.toolNames());
+            assertEquals(Optional.of(ConfirmMode.HOLD), guarded.confirmMode());
+
+            AnswerTools answer = guarded.forNewAnswer();
+            ToolCallback caseStudy = answer.callbacks().get(0);
+            assertEquals("ran get_case_study", caseStudy.call("{\"slug\":\"nox\"}"));
+            assertTrue(caseStudy.call("{\"slug\":\"../../etc/passwd\"}").startsWith("Error: invalid argument \"slug\""));
+            assertFalse(answer.callbacks().get(1).call("{\"body\":\"Olá\"}").startsWith("ran"), "held, not run");
+            HeldCall held = answer.release(false).orElseThrow();
+            assertEquals("ran send_message", held.run());
+            assertEquals(List.of("get_case_study:Run", "get_case_study:Deny", "send_message:Confirm"), AppTools.HEARD);
+        }
+        try (AnnotationConfigApplicationContext context = start(p)) {
+            assertFalse(has(context, GuardedToolCallbacks.class), "no tool beans, nothing to guard");
+        }
+    }
+
+    @Test
+    @DisplayName("Spring AI: a confirm tool without on-confirm, or a tool without a rule, stops the app")
+    void toolCallbackStartupFailures() {
+        String noMode = failure(full(), AppTools.class);
+        assertTrue(noMode.startsWith("noxguard.tools.on-confirm is required: send_message needs the person's confirmation"), noMode);
+
+        Map<String, Object> p = full();
+        p.put("noxguard.tools.on-confirm", "deny");
+        String undeclared = failure(p, AppTools.class, UndeclaredTool.class);
+        assertEquals("noxguard.tools: tools exposed to the model without a rule in the ToolPolicy: delete_orders", undeclared);
+    }
+
+    @Test
+    @DisplayName("without noxguard-spring-ai on the class path: no GuardedToolCallbacks, the rest stays")
+    void withoutSpringAi() {
+        try (AnnotationConfigApplicationContext context = start(full(), new FilteredClassLoader(GuardedToolCallbacks.class), AppTools.class)) {
+            assertFalse(has(context, GuardedToolCallbacks.class));
+            assertTrue(has(context, ToolPolicy.class));
+        }
+    }
+
     /** An app that brings its own beans. */
     @Configuration(proxyBeanMethods = false)
     static class AppBeans {
@@ -372,11 +474,12 @@ class NoxguardAutoConfigurationTest {
     }
 
     @Test
-    @DisplayName("the jar registers both auto-configurations and ships property metadata for IDEs")
+    @DisplayName("the jar registers its auto-configurations and ships property metadata for IDEs")
     void registrationAndMetadata() throws IOException {
         String imports = read(getClass().getClassLoader().getResource("META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports"));
         assertTrue(imports.contains(NoxguardAutoConfiguration.class.getName()));
         assertTrue(imports.contains(NoxguardReactorAutoConfiguration.class.getName()));
+        assertTrue(imports.contains(NoxguardSpringAiAutoConfiguration.class.getName()));
 
         String ours = null;
         for (URL url : Collections.list(getClass().getClassLoader().getResources("META-INF/spring-configuration-metadata.json"))) {
@@ -388,7 +491,7 @@ class NoxguardAutoConfigurationTest {
         assertTrue(ours != null, "metadata generated by spring-boot-configuration-processor");
         for (String key : List.of("noxguard.refusal", "noxguard.stream.leak-markers", "noxguard.history.secret",
                 "noxguard.history.random-secret-for-development", "noxguard.links.allow", "noxguard.data.reserved-tags",
-                "noxguard.citations.allow-names", "noxguard.input.on-failure", "noxguard.input.timeout")) {
+                "noxguard.citations.allow-names", "noxguard.input.on-failure", "noxguard.input.timeout", "noxguard.tools.on-confirm")) {
             assertTrue(ours.contains("\"" + key + "\""), key);
         }
     }

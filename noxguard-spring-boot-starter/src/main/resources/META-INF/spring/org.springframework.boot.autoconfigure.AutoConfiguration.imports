@@ -1,2 +1,3 @@
 com.marcusrdrigues.noxguard.spring.boot.NoxguardAutoConfiguration
 com.marcusrdrigues.noxguard.spring.boot.NoxguardReactorAutoConfiguration
+com.marcusrdrigues.noxguard.spring.boot.NoxguardSpringAiAutoConfiguration

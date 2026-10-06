@@ -7,12 +7,12 @@
   <parent>
     <groupId>com.marcusrdrigues</groupId>
     <artifactId>noxguard-parent</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
+    <version>0.4.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>noxguard-spring-boot-starter</artifactId>
   <name>noxguard-spring-boot-starter</name>
-  <description>Spring Boot auto-configuration for noxguard: the guards and the tool policy from application properties, with startup failures for unsafe settings.</description>
+  <description>Spring Boot auto-configuration for noxguard: the guards, the tool policy and the guarded Spring AI tools from application properties, with startup failures for unsafe settings.</description>
 
   <properties>
     <!-- Only this module knows Spring; the core stays free of it (docs/specs/0.2-tool-policy-and-starter.md). -->
@@ -41,6 +41,18 @@
       <groupId>com.marcusrdrigues</groupId>
       <artifactId>noxguard-reactor</artifactId>
       <optional>true</optional>
+    </dependency>
+    <dependency>
+      <!-- Optional: the GuardedToolCallbacks bean appears only when the app has noxguard-spring-ai. -->
+      <groupId>com.marcusrdrigues</groupId>
+      <artifactId>noxguard-spring-ai</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <!-- Provided: an app with noxguard-spring-ai already has Spring AI. -->
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-model</artifactId>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
