@@ -29,9 +29,9 @@ One-time setup (Marcus), then one tag per release. Nothing secret ever goes into
 1. Move `## [x.y.z] - unreleased` in `CHANGELOG.md` to today's date and push.
 2. Tag and push:
    ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.2.0
+   git push origin v0.2.0
    ```
-3. The **Release** workflow sets the version from the tag, runs the tests, signs and publishes `noxguard-parent`, `noxguard-core` and `noxguard-reactor`. It waits until Central says "published"; the artifacts show up on search a little later.
+3. The **Release** workflow sets the version from the tag, runs the tests, signs and publishes every module: `noxguard-parent`, `noxguard-core`, `noxguard-reactor` and `noxguard-spring-boot-starter`. It waits until Central says "published"; the artifacts show up on search a little later.
 
 The repository itself stays at `-SNAPSHOT`. CI already checks the release build (sources, Javadoc, the Central plugin) without signing on every push, so a tag should only fail on credentials.

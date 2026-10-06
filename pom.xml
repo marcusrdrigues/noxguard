@@ -10,7 +10,7 @@
   <packaging>pom</packaging>
 
   <name>noxguard</name>
-  <description>Deterministic guardrails for LLM chats and agents: a streaming output guard, a link allow list, data delimiting, signed history, an agent proposal gate and input views.</description>
+  <description>Deterministic guardrails for LLM chats and agents: a streaming output guard, a link allow list, data delimiting, signed history, a deny-by-default tool policy, an agent proposal gate and input views.</description>
   <url>https://github.com/marcusrdrigues/noxguard</url>
 
   <licenses>

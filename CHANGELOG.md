@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-06
+
+### Added
+
+- `ToolPolicy` (in `noxguard-core`, package `agent`): decides each tool call an agent asks for, deny by default. A `ToolSession` per answer returns a sealed `ToolDecision`: `Run`, `Confirm` (a tool with a side effect, for a `ProposalGate` and the user) or `Deny` with a reason (`UNKNOWN_TOOL`, `ARGUMENT`, `LIMIT`) and a message for the model that never echoes what the model sent. `ArgRule` checks arguments in code (`required`, `matches`, `maxLength`, `oneOf`, `type`, or an app rule that fails closed). Limits per tool and per answer; only the arguments listed in `logArgs` reach logs.
+- `noxguard-spring-boot-starter`: Spring Boot 4 auto-configuration. `noxguard.*` properties create `LinkPolicy`, `DataEnvelope`, `HistorySigner`, `StreamGuards`, `ToolPolicy` and, with `noxguard-reactor`, `ReactorGuard`; each backs off when the app defines its own. A history secret under 32 bytes, an invalid regex or a tool setting without meaning stops the app at startup, naming the property. Configuration metadata is generated for IDEs.
+
+### Changed
+
+- `examples/chat-spring-boot` uses the starter, and its tool calls go through the `ToolPolicy`: a read-only tool runs, the message tool only proposes, anything else is denied. The noxeval suite has 14 cases.
+
 ## [0.1.0] - 2026-10-04
 
 ### Added
