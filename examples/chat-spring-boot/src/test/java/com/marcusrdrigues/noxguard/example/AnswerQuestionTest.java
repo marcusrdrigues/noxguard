@@ -194,7 +194,8 @@ class AnswerQuestionTest {
     @DisplayName("an invented year is in no source: the sentence goes, and the visitor gets the 'not confirmed' text")
     void inventedDetailIsRemoved() {
         List<ChatEvent> events = ask("When did the store first open?", List.of());
-        assertTrue(streamed(events).contains("1998"), "the model did say it");
+        assertTrue(streamed(events).contains("first opened its doors"), "the model did start the sentence");
+        assertFalse(streamed(events).contains("1998"), "the year was still in the stream guard's held-back tail when the check replaced it");
         assertTrue(events.contains(new ChatEvent.Replace(ChatPolicy.NOT_CONFIRMED, "NOT_CONFIRMED")));
         assertEquals(ChatPolicy.NOT_CONFIRMED, done(events).answer());
     }
