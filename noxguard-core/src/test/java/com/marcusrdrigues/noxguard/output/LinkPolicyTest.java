@@ -46,6 +46,17 @@ class LinkPolicyTest {
     }
 
     @Test
+    @DisplayName("every Markdown image is reported, in order, not just the first")
+    void everyImageIsReported() {
+        List<ForeignLink> found = NOX.foreignLinks("![a](https://evil.example/1.png) mid ![b](https://evil.example/2.png) end");
+        assertEquals(
+                List.of(new ForeignLink(ForeignLink.Kind.MARKDOWN_IMAGE, "![a]("), new ForeignLink(ForeignLink.Kind.MARKDOWN_IMAGE, "![b](")),
+                found.stream().filter(f -> f.kind() == ForeignLink.Kind.MARKDOWN_IMAGE).toList(),
+                "the Javadoc promises any Markdown image, so the second one can't be missed");
+        assertEquals(2, found.stream().filter(f -> f.kind() == ForeignLink.Kind.URL).count(), "both addresses are foreign");
+    }
+
+    @Test
     @DisplayName("a no-break or other Unicode space can't join a foreign link to an allowed one")
     void unicodeSpacesEndALink() {
         for (String space : List.of("\u00A0", "\u2028", "\u3000", "\uFEFF", "\u202F")) {

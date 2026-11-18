@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `LinkPolicy.foreignLinks` reported only the first Markdown image of an answer, although the Javadoc promises any of them, allowed or not. Every image is now reported, in order of appearance.
+
 ## [0.4.0] - 2026-10-06
 
 ### Added

@@ -69,7 +69,7 @@ public final class LinkPolicy {
         Text.required(text, "text");
         List<ForeignLink> found = new ArrayList<>();
         Matcher image = MARKDOWN_IMAGE.matcher(text);
-        if (image.find()) {
+        while (image.find()) {
             found.add(new ForeignLink(ForeignLink.Kind.MARKDOWN_IMAGE, image.group()));
         }
         Matcher link = LINK.matcher(text);
