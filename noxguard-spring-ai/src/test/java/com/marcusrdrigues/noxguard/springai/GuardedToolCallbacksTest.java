@@ -184,13 +184,15 @@ class GuardedToolCallbacksTest {
 
         AnswerTools answer = guarded(ConfirmMode.HOLD).forNewAnswer();
         ToolCallback tool = named(answer, "send-report");
-        assertEquals(GuardedToolCallback.HELD, tool.call("{\"month\":\"2026-09\"}"));
-        assertEquals(GuardedToolCallback.ALREADY_HELD, tool.call("{\"month\":\"2026-10\"}"), "one action per answer");
+        ToolContext context = new ToolContext(Map.of("user", "42"));
+        assertEquals(GuardedToolCallback.HELD, tool.call("{\"month\":\"2026-09\"}", context));
+        assertEquals(GuardedToolCallback.ALREADY_HELD, tool.call("{\"month\":\"2026-10\"}", context), "one action per answer");
         HeldCall held = answer.release(false).orElseThrow();
         assertEquals(Map.of("month", "2026-09"), held.call().args());
         assertTrue(report.inputs.isEmpty(), "nothing ran before the person confirmed");
         assertEquals("ran send-report", held.run());
         assertEquals(List.of("{\"month\":\"2026-09\"}"), report.inputs);
+        assertSame(context, report.context, "the tool context of the proposal reaches the tool after the confirmation");
         assertTrue(held.ran());
         assertThrows(IllegalStateException.class, held::run, "runs once");
     }

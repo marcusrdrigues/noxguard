@@ -58,15 +58,15 @@ final class GuardedToolCallback implements ToolCallback {
         return switch (decision) {
             case ToolDecision.Run run -> tool.call(toolInput, toolContext);
             case ToolDecision.Deny deny -> deny.messageForModel();
-            case ToolDecision.Confirm confirm -> confirm(confirm, toolInput);
+            case ToolDecision.Confirm confirm -> confirm(confirm, toolInput, toolContext);
         };
     }
 
-    private String confirm(ToolDecision.Confirm confirm, String toolInput) {
+    private String confirm(ToolDecision.Confirm confirm, String toolInput, ToolContext toolContext) {
         if (guarded.confirmMode().orElse(ConfirmMode.DENY) == ConfirmMode.DENY) {
             return NEEDS_CONFIRMATION;
         }
-        return answer.hold(new HeldCall(confirm.call(), tool, toolInput)) ? HELD : ALREADY_HELD;
+        return answer.hold(new HeldCall(confirm.call(), tool, toolInput, toolContext)) ? HELD : ALREADY_HELD;
     }
 
     /** The model's arguments as a map; {@code null} when they are not a JSON object. No input means no arguments. */

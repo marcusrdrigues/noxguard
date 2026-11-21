@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `HeldCall` (`noxguard-spring-ai`) ran the confirmed tool without its `ToolContext`. A tool with side effects that reads the context (the signed-in user, an auth token) got `null` after the person confirmed, while a call the policy let run straight away got the context it was called with. The held call now keeps the context of the call that proposed it and passes it on `run()`.
+
 ## [0.4.0] - 2026-10-06
 
 ### Added
