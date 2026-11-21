@@ -219,6 +219,11 @@ public final class CitationGuard {
     /** Replaces the sentence's citations with new ones, before the final punctuation ("Vibetex [3]."). */
     private static String withCitations(String sentence, List<Integer> cites) {
         String plain = stripCitations(sentence);
+        if (cites.isEmpty()) {
+            // Every citation was to a number the model never received: the sentence is kept as it reads, without the
+            // space the marks would leave before the final punctuation.
+            return plain;
+        }
         StringBuilder marks = new StringBuilder();
         for (int n : cites) {
             marks.append('[').append(n).append(']');

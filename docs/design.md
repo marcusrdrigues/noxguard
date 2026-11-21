@@ -49,8 +49,9 @@ The guards are ports of TypeScript code that runs in Nox. Nox's tests were porte
 | Optional fields in strict schemas | Required but nullable | Required | The model would invent a value |
 | Surrogate pairs | Never split | Can be split | A half pair breaks the JSON of the client |
 | Link start | Not glued to a letter or digit | JavaScript `\b` | `_https://...` is still a link to a Markdown renderer |
+| Dropped citation | Sentence kept as it reads | Space left where the citation was | A kept sentence read "in 2024 ."; the 112 fixture cases that hit it hold the fixed output until Nox carries the same fix and the fixture is regenerated |
 
-The citation guard (0.3) is checked the same way: `tools/parity/citations-fixture.mjs` runs Nox's `checkCitations` and `unsupportedDetails` over 1,500 answers made from the site's own prose (with mutated numbers, foreign names, wrong citations, dependent sentences and date arithmetic), and the Java test replays every case. There is no intended difference. Passages about clients are left out of the fixture, which is committed here.
+The citation guard (0.3) is checked the same way: `tools/parity/citations-fixture.mjs` runs Nox's `checkCitations` and `unsupportedDetails` over 1,500 answers made from the site's own prose (with mutated numbers, foreign names, wrong citations, dependent sentences and date arithmetic), and the Java test replays every case. The dropped-citation row above is the only difference, and a temporary one: until Nox carries the same fix, the 112 cases the flaw touches hold the fixed output, each verified to differ from the generated text only by that space; regenerating the fixture with the script once Nox is fixed confirms them. Passages about clients are left out of the fixture, which is committed here.
 
 ## Testing
 

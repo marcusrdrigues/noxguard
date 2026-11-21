@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `CitationGuard` left a space where a dropped citation had been: a sentence whose only citation was to a number the model never received read "I didn't find a prize in 2024 ." (or ended in a trailing space when it had no final punctuation). The citation is dropped and the sentence reads clean. The TypeScript original in Nox has the same flaw — 112 of the 1,500 parity cases hit it — so those expectations in `citations-parity.tsv` were updated to the fixed output; regenerating the fixture from the site once the original is fixed will confirm them.
+
 ## [0.4.0] - 2026-10-06
 
 ### Added
